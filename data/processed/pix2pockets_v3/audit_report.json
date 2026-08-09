@@ -1,0 +1,69 @@
+{
+  "seed": 42,
+  "near_duplicate_hamming_threshold": 2,
+  "splits": {
+    "train": {
+      "images": 155,
+      "labels": 155,
+      "boxes": 4495,
+      "class_counts": {
+        "Black": 152,
+        "Cue": 154,
+        "Dot": 2781,
+        "Solid": 743,
+        "Striped": 665
+      }
+    },
+    "valid": {
+      "images": 20,
+      "labels": 20,
+      "boxes": 582,
+      "class_counts": {
+        "Black": 20,
+        "Cue": 20,
+        "Dot": 359,
+        "Solid": 97,
+        "Striped": 86
+      }
+    },
+    "test": {
+      "images": 20,
+      "labels": 20,
+      "boxes": 576,
+      "class_counts": {
+        "Black": 19,
+        "Cue": 20,
+        "Dot": 356,
+        "Solid": 96,
+        "Striped": 85
+      }
+    },
+    "geometry_eval": {
+      "images": 52,
+      "labels": 52,
+      "boxes": 1591,
+      "class_counts": {
+        "Black": 51,
+        "Cue": 51,
+        "Dot": 931,
+        "Solid": 289,
+        "Striped": 269
+      }
+    }
+  },
+  "repairs": [
+    {
+      "source_id": "18t",
+      "scene_group": "situation-18",
+      "split": "geometry_eval",
+      "source_image": "D:\\billiards project\\8-Ball Pool.v3i.yolov11\\train\\images\\18t_png.rf.52573d3d561f4ef4c73fbcc5a0d18752.jpg",
+      "source_label": "D:\\billiards project\\8-Ball Pool.v3i.yolov11\\train\\labels\\18t_png.rf.52573d3d561f4ef4c73fbcc5a0d18752.txt",
+      "image_filename": "18t_png.rf.52573d3d561f4ef4c73fbcc5a0d18752.jpg",
+      "label_filename": "18t_png.rf.52573d3d561f4ef4c73fbcc5a0d18752.txt",
+      "image_sha256": "64fdd761361ca568eafb5159a9adc1e23b25195c26dae782dec7e852dac9416c",
+      "label_sha256": "ee12330dd3f2063aea41b0dd279abc97b3a1ec4581f676d21bd3b99e7be5757c",
+      "dhash": "60033b330b13bbd0",
+      "repair_count": 1
+    }
+  ]
+}
