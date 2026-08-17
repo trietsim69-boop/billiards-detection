@@ -745,3 +745,78 @@ The following choices require evidence from the prototype and are not silently a
 - Ultralytics YOLO11 documentation: <https://docs.ultralytics.com/models/yolo11/>
 - Ultralytics training documentation: <https://docs.ultralytics.com/modes/train/>
 - PyTorch local installation selector: <https://pytorch.org/get-started/locally/>
+
+## 29. Final workflow graph
+
+```mermaid
+flowchart TD
+    preparedData[(Processed dataset)]
+    cudaSetup{{CUDA environment}}
+
+    subgraph phaseOne ["Phase 1: YOLO11 Detection"]
+        inspectLabels[Inspect labels]
+        tinyOverfit[Overfit tiny sample]
+        smokeTest[Run smoke test]
+        trainBaseline[Train baseline]
+        reviewMetrics[Review metrics]
+        filterDetections[Filter detections]
+    end
+
+    detectorReady{Detector ready?}
+    diagnoseDetector[Diagnose errors]
+
+    subgraph phaseTwo ["Phase 2: Table Geometry"]
+        splitCases[Split geometry cases]
+        groundTruthDots[Use ground-truth dots]
+        fitRails[Fit four rails]
+        matchTemplate[Match dot template]
+        estimateHomography[Estimate homography]
+        projectGroundTruth[Project labelled balls]
+        integratePredictions[Use YOLO predictions]
+        geometryReady{Geometry valid?}
+    end
+
+    failureDiagnostics[Save failure diagnostics]
+    manualCalibration[Click four corners]
+    manualHomography[Estimate manual homography]
+    resultArtifacts[Visuals and JSON]
+    tableState([Normalized table state])
+    futureWork[Missing-dot robustness]
+
+    preparedData --> cudaSetup
+    cudaSetup --> inspectLabels
+    inspectLabels --> tinyOverfit
+    tinyOverfit --> smokeTest
+    smokeTest --> trainBaseline
+    trainBaseline --> reviewMetrics
+    reviewMetrics --> filterDetections
+    filterDetections --> detectorReady
+    detectorReady -->|"No"| diagnoseDetector
+    diagnoseDetector -.-> smokeTest
+    detectorReady -->|"Yes"| splitCases
+    splitCases --> groundTruthDots
+    groundTruthDots --> fitRails
+    fitRails --> matchTemplate
+    matchTemplate --> estimateHomography
+    estimateHomography --> projectGroundTruth
+    projectGroundTruth --> integratePredictions
+    filterDetections -->|"Supplies predictions"| integratePredictions
+    integratePredictions --> geometryReady
+    geometryReady -->|"Yes"| resultArtifacts
+    geometryReady -->|"No"| failureDiagnostics
+    failureDiagnostics --> manualCalibration
+    manualCalibration --> manualHomography
+    manualHomography --> resultArtifacts
+    resultArtifacts --> tableState
+    tableState -.-> futureWork
+
+    style phaseOne fill:#C2E5FF,stroke:#3DADFF
+    style phaseTwo fill:#DCCCFF,stroke:#874FFF
+    style detectorReady fill:#FFECBD,stroke:#FFC943
+    style geometryReady fill:#FFECBD,stroke:#FFC943
+    style diagnoseDetector fill:#FFCDC2,stroke:#FF7556
+    style failureDiagnostics fill:#FFCDC2,stroke:#FF7556
+    style manualCalibration fill:#FFE0C2,stroke:#FF9E42
+    style tableState fill:#CDF4D3,stroke:#66D575
+    style futureWork fill:#D9D9D9,stroke:#B3B3B3
+```
