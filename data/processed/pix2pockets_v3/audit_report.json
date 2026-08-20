@@ -5,11 +5,11 @@
     "train": {
       "images": 155,
       "labels": 155,
-      "boxes": 4495,
+      "boxes": 4494,
       "class_counts": {
         "Black": 152,
         "Cue": 154,
-        "Dot": 2781,
+        "Dot": 2780,
         "Solid": 743,
         "Striped": 665
       }
@@ -63,6 +63,19 @@
       "image_sha256": "64fdd761361ca568eafb5159a9adc1e23b25195c26dae782dec7e852dac9416c",
       "label_sha256": "ee12330dd3f2063aea41b0dd279abc97b3a1ec4581f676d21bd3b99e7be5757c",
       "dhash": "60033b330b13bbd0",
+      "repair_count": 1
+    },
+    {
+      "source_id": "48",
+      "scene_group": "visual-045",
+      "split": "train",
+      "source_image": "D:\\billiards project\\8-Ball Pool.v3i.yolov11\\train\\images\\48_png.rf.6d53741dd87298c5fedafc4e15fab214.jpg",
+      "source_label": "D:\\billiards project\\8-Ball Pool.v3i.yolov11\\train\\labels\\48_png.rf.6d53741dd87298c5fedafc4e15fab214.txt",
+      "image_filename": "48_png.rf.6d53741dd87298c5fedafc4e15fab214.jpg",
+      "label_filename": "48_png.rf.6d53741dd87298c5fedafc4e15fab214.txt",
+      "image_sha256": "e096c005cec19de14f8aa97ba7156546807b79c5c343556ae8ceea03e2aabd5f",
+      "label_sha256": "a38dc0ba67902f5c5990ed9779e3f02b1249c90137d8d6eb0e839519139025f5",
+      "dhash": "96060705050707d6",
       "repair_count": 1
     }
   ]
