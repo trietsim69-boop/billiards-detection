@@ -68,12 +68,16 @@ The processed dataset contains paired images and labels in every split. The know
 ### Current local machine
 
 - GPU: NVIDIA GeForce MX550 with 2 GB VRAM.
-- Preferred Python: Python 3.12 in a project virtual environment.
-- Current PyTorch installation is CPU-only.
-- Ultralytics is not installed yet.
+- Python: 3.12.10 in the project `.venv`.
+- PyTorch: `2.9.0+cu126`; CUDA is available and identifies the MX550.
+- Ultralytics: `8.4.124`.
+- Torchvision: `0.24.0+cu126`.
+- OpenCV: `5.0.0`; PyYAML: `6.0.3`; pytest: `9.1.1`.
 - Local training will be GPU-first, with CPU used only for diagnostics or fallback.
 
-Two gigabytes of VRAM is a real training constraint. Batch size `1` is the safe starting point. The smoke test begins at `512` pixels, then attempts the preferred `640` pixels. If `640` causes an out-of-memory error, `512` remains the local baseline rather than forcing an unstable setup.
+Two gigabytes of VRAM is a real training constraint, but the measured smoke tests show that batch `2` fits at both `512` and `640`. The `640` run peaked at about `0.63 GB` as reported by Ultralytics, so `640` is the selected baseline resolution. Keep batch `1` as the fallback if a later configuration uses more memory.
+
+Ultralytics' AMP compatibility check reports anomalies with this local PyTorch/GPU combination, so the verified runs use `amp=False`. Re-test AMP only as a separate controlled experiment; do not silently enable it in the baseline.
 
 ### Repository reproducibility note
 
@@ -232,6 +236,18 @@ Training loss should fall and predictions on this deliberately reused subset sho
 
 Do not start the full baseline if the model cannot learn the tiny sample. Inspect class order, label parsing, image paths, and CUDA execution first.
 
+### Completed result
+
+- Subset: 10 training images, 289 boxes, all five classes.
+- Model/input: YOLO11n at `512`, batch `1`, 50 epochs, augmentation disabled.
+- Crucial setting: `nbs=1` so each physical batch performs an optimizer update.
+- Independent saved-checkpoint result: precision `0.8983`, recall `0.8529`, mAP50 `0.8962`, mAP50-95 `0.7349`.
+- Per-class mAP50: Black `0.885`, Cue `0.962`, Dot `0.753`, Solid `0.949`, Striped `0.933`.
+- Acceptance script: `python -m scripts.check_tiny_overfit`.
+- Artifacts: `runs/detect/outputs/detection/tiny-overfit-nbs1-yolo11n-512/`.
+
+Learning note: `batch` is the number of images processed together in GPU memory. `nbs` is Ultralytics' nominal batch used to choose gradient accumulation. With batch `1` and the default `nbs=64`, the 10-image experiment performed optimizer steps too rarely and appeared unable to learn. Match `nbs` to the physical batch for short diagnostic runs unless deliberate gradient accumulation is part of the experiment.
+
 ## 9. Checkpoint 1.3 — two-to-three-epoch smoke test
 
 ### Concept to learn
@@ -246,28 +262,27 @@ The later training script should expose the same settings, but the first run may
 yolo detect train `
   model=yolo11n.pt `
   data="data/processed/pix2pockets_v3/data.yaml" `
-  imgsz=512 `
-  batch=1 `
+  imgsz=640 `
+  batch=2 `
+  nbs=2 `
   epochs=3 `
   device=0 `
   workers=0 `
   cache=False `
-  amp=True `
+  amp=False `
   seed=42 `
-  mosaic=0 `
-  mixup=0 `
   plots=True `
   project="outputs/detection" `
-  name="smoke-yolo11n-512"
+  name="smoke-yolo11n-640"
 ```
 
 `workers=0` is conservative for the first Windows run. It can be increased later only after the pipeline is stable.
 
 ### VRAM adaptation sequence
 
-1. Run `512`, batch `1`.
-2. If stable, repeat the smoke test at `640`, batch `1`.
-3. If `640` runs out of memory, return to `512` and record the failure.
+1. Run `512`, batch `2`.
+2. If stable, repeat the smoke test at `640`, batch `2`.
+3. If `640` runs out of memory, retry `640` with batch `1`; return to `512` only if that also fails.
 4. Do not lower image size silently; include the chosen size in every run name and result report.
 
 ### Expected artifacts
@@ -286,6 +301,17 @@ yolo detect train `
 - Did each class appear in metrics and sample predictions?
 - Is `640` locally practical, or is `512` the honest baseline?
 
+### Completed results
+
+Both runs used the real 155-image training split and untouched 20-image validation split. Every image loaded with zero corrupt records.
+
+| Run | Peak GPU memory | Precision | Recall | mAP50 | mAP50-95 | Dot AP50 |
+|---|---:|---:|---:|---:|---:|---:|
+| `smoke-yolo11n-512` | about 0.44 GB | 0.523 | 0.586 | 0.487 | 0.283 | 0.310 |
+| `smoke-yolo11n-640` | about 0.63 GB | 0.498 | 0.719 | 0.650 | 0.437 | 0.498 |
+
+These are pipeline and capacity results, not final accuracy claims. `640` is selected because it fits comfortably and is substantially better for the small rail-dot class in this controlled smoke comparison. Saved artifacts live under `outputs/detection/`.
+
 ## 10. Checkpoint 1.4 — reproducible YOLO11n baseline
 
 ### Concept to learn
@@ -299,8 +325,10 @@ These settings must be recorded in `configs/train.yaml`. They are a starting con
 | Setting | Initial value | Reason |
 |---|---:|---|
 | Model | `yolo11n.pt` | Smallest pretrained YOLO11 detector |
-| Image size | `640` if it fits; otherwise `512` | Prefer detail while respecting 2 GB VRAM |
-| Batch | `1` | Safe MX550 starting point |
+| Image size | `640` | Smoke-tested; improves small-dot detection and fits locally |
+| Batch | `2` | Smoke-tested on the MX550 at `640` |
+| Nominal batch (`nbs`) | `2` | One optimizer update per physical batch for this small dataset |
+| AMP | `False` | Local Ultralytics compatibility check reported AMP anomalies |
 | Maximum epochs | `100` | Allows a useful baseline without copying the paper's 2,000 epochs blindly |
 | Patience | `20` | Stop after a sustained validation plateau |
 | Device | `0` | Local NVIDIA GPU |
@@ -701,11 +729,11 @@ After the clear-image prototype is understood, extend Phase 2 in a separate iter
 
 Follow this order and do not skip directly to predicted-dot homography:
 
-- [ ] Create Python 3.12 environment and verify CUDA PyTorch.
-- [ ] Install and record Ultralytics/OpenCV dependencies.
-- [ ] Load and visualize the processed five-class dataset.
-- [ ] Overfit a tiny representative training subset.
-- [ ] Complete YOLO11n smoke test at `512`, then attempt `640`.
+- [x] Create Python 3.12 environment and verify CUDA PyTorch.
+- [x] Install and record Ultralytics/OpenCV dependencies.
+- [x] Load and visualize the processed five-class dataset.
+- [x] Overfit a tiny representative training subset.
+- [x] Complete YOLO11n smoke test at `512`, then attempt `640`.
 - [ ] Record and train the reproducible local baseline.
 - [ ] Produce validation diagnostics and an error gallery.
 - [ ] Define the raw and filtered detection contract.

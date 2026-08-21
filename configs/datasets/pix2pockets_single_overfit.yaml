@@ -1,0 +1,8 @@
+# Minimal diagnostic dataset for reproducing tiny-overfit failures.
+# Train and validation intentionally reuse one image.
+path: .
+train: configs/datasets/pix2pockets_single_overfit.txt
+val: configs/datasets/pix2pockets_single_overfit.txt
+
+nc: 5
+names: ['Black', 'Cue', 'Dot', 'Solid', 'Striped']

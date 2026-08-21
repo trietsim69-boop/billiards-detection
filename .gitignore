@@ -1,1 +1,5 @@
 .venv/
+**/labels.cache
+outputs/
+runs/
+*.pt
