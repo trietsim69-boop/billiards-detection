@@ -1,0 +1,50 @@
+# Reproducible YOLO11n baseline for the five-class Pix2Pockets detector.
+# Run from the repository root with:
+#   yolo detect train cfg=configs/train.yaml
+
+task: detect
+mode: train
+
+model: yolo11n.pt
+data: data/processed/pix2pockets_v3/data.yaml
+
+imgsz: 640
+batch: 2
+nbs: 2
+epochs: 100
+patience: 20
+
+device: 0
+workers: 0
+cache: false
+amp: false
+seed: 42
+deterministic: true
+
+optimizer: auto
+pretrained: true
+
+# Preserve the single-table scene. Only use symmetry and mild broadcast-lighting
+# variation in this first serious baseline.
+mosaic: 0.0
+mixup: 0.0
+copy_paste: 0.0
+cutmix: 0.0
+degrees: 0.0
+translate: 0.0
+scale: 0.0
+shear: 0.0
+perspective: 0.0
+flipud: 0.0
+fliplr: 0.5
+hsv_h: 0.015
+hsv_s: 0.4
+hsv_v: 0.3
+
+val: true
+plots: true
+save: true
+save_period: -1
+project: outputs/detection
+name: baseline-yolo11n-640
+exist_ok: false

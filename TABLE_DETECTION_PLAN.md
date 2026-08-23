@@ -353,6 +353,25 @@ The paper trained a YOLOv5 detector at `640 x 640` and reported an average AP50 
 
 A repeatable YOLO11n baseline exists, even if its accuracy is not yet satisfactory. The next step is diagnosis, not immediate hyperparameter searching.
 
+### Completed baseline result — 2026-08-21
+
+- Reproducible configuration: `configs/train.yaml`.
+- Runtime: Ultralytics `8.4.124`, Python `3.12.10`, PyTorch `2.9.0+cu126`, NVIDIA GeForce MX550 with 2 GB VRAM.
+- Training: `yolo11n.pt`, `640`, batch and nominal batch `2`, `amp=False`, seed `42`, maximum 100 epochs, patience 20.
+- Early stopping ended training after epoch 66 in `0.758` hours; epoch 46 was selected using the validation split.
+- Independent validation on 20 images and 582 objects reproduced precision `0.931`, recall `0.806`, mAP50 `0.854`, and mAP50-95 `0.665`.
+- Per-class results:
+
+| Class | Precision | Recall | mAP50 | mAP50-95 |
+|---|---:|---:|---:|---:|
+| Black | 0.959 | 0.850 | 0.878 | 0.765 |
+| Cue | 0.974 | 0.850 | 0.977 | 0.838 |
+| Dot | 0.833 | 0.640 | 0.640 | 0.308 |
+| Solid | 0.943 | 0.859 | 0.888 | 0.695 |
+| Striped | 0.947 | 0.832 | 0.884 | 0.720 |
+
+The visual predictions agree with the metrics: the four ball classes are a useful first baseline, while small rail dots are the limiting class because some are missed or detected with low confidence. This is a diagnosis for Checkpoint 1.5, not a reason to change settings before building an error gallery. Training artifacts are under `outputs/detection/baseline-yolo11n-640/`; the independently regenerated validation reports are under `outputs/detection/baseline-yolo11n-640-independent-val/`. The test split remains untouched.
+
 ## 11. Checkpoint 1.5 — interpret validation results
 
 ### Concept to learn
@@ -734,7 +753,7 @@ Follow this order and do not skip directly to predicted-dot homography:
 - [x] Load and visualize the processed five-class dataset.
 - [x] Overfit a tiny representative training subset.
 - [x] Complete YOLO11n smoke test at `512`, then attempt `640`.
-- [ ] Record and train the reproducible local baseline.
+- [x] Record and train the reproducible local baseline.
 - [ ] Produce validation diagnostics and an error gallery.
 - [ ] Define the raw and filtered detection contract.
 - [ ] Group geometry situations into development and sealed evaluation sets.
