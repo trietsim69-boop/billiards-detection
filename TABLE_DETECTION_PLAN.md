@@ -413,6 +413,19 @@ Run only an experiment that responds to an observed error:
 - Tune confidence thresholds only after reviewing precision-recall behavior.
 - Do not change model size, image size, augmentation, and thresholds in the same comparison.
 
+### Completed validation diagnosis — 2026-08-23
+
+The repeatable analyzer `scripts/analyze_detector_errors.py` evaluated all 20 validation images without using the test split. It retained low-confidence predictions, swept confidence thresholds from `0.05` to `0.70`, matched predictions class-aware at IoU `0.50`, grouped recall by box size, recorded per-image dot counts, and generated annotated error images.
+
+- Confidence `0.50` produced the highest Dot F1 in this sweep: precision `0.822`, recall `0.657`, and F1 `0.731`.
+- All 359 labelled dots are smaller than `32 x 32` pixels in their original images.
+- At confidence `0.50`, 236 dots matched and 123 did not satisfy the correct-class/IoU rule.
+- Lowering confidence to `0.05` raised matched-dot recall only from `0.657` to `0.699`, while false dot predictions increased from 51 to 232.
+- Small ball recall was also lower than medium ball recall, confirming a general small-object effect rather than an isolated Dot class-name problem.
+- The worst distant-table frame matched only 1 of 18 labelled dots. Several overlays also show near-overlapping predicted and labelled dot boxes that fail IoU because tiny boxes are sensitive to a few pixels of displacement.
+
+Therefore, confidence reduction alone is rejected as the next improvement. Keep IoU-based detection metrics for comparison, but later evaluate dot-centre error separately because rail fitting consumes centres rather than box area. Reports and the visual gallery are under `outputs/detection/baseline-yolo11n-640-error-analysis/`.
+
 ## 12. Checkpoint 1.6 — inference contract and post-processing
 
 ### Concept to learn
@@ -754,7 +767,7 @@ Follow this order and do not skip directly to predicted-dot homography:
 - [x] Overfit a tiny representative training subset.
 - [x] Complete YOLO11n smoke test at `512`, then attempt `640`.
 - [x] Record and train the reproducible local baseline.
-- [ ] Produce validation diagnostics and an error gallery.
+- [x] Produce validation diagnostics and an error gallery.
 - [ ] Define the raw and filtered detection contract.
 - [ ] Group geometry situations into development and sealed evaluation sets.
 - [ ] Select clear, full-dot geometry-development images.
