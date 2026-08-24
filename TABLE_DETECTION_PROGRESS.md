@@ -10,11 +10,11 @@ This file is the short operational tracker. `TABLE_DETECTION_PLAN.md` contains t
 | Area | Status | Evidence |
 |---|---|---|
 | Dataset preparation and audit | Done | Processed dataset, split manifest, and audit report exist |
-| Local YOLO/CUDA environment | Needs repair | Training and validation completed, but `.venv` now references a missing base Python executable; custom diagnostics are paused |
+| Local YOLO/CUDA environment | Done | Project `.venv`, Ultralytics 8.4.124, CUDA, and the NVIDIA MX550 successfully completed the resumed 960 px run |
 | Tiny overfit diagnostic | Done | Representative 10-image subset successfully memorized |
 | Two-to-three-epoch smoke tests | Done | YOLO11n tested at 512 and 640; 640 selected |
 | Reproducible YOLO11n baseline | Done | Best epoch 46; validation mAP50 0.854 and mAP50-95 0.665 |
-| Higher-resolution YOLO11n retrain | Done (resource-limited) | 60 epochs completed; 960 px candidate selected at epoch 49; Dot recall 0.762 and Dot mAP50 0.743 |
+| Higher-resolution YOLO11n retrain | Done | Resumed run stopped normally via patience; best checkpoint at displayed epoch 68, with Dot recall 0.786 and Dot mAP50 0.763 |
 | Validation error analysis | Done | Threshold sweep, size metrics, per-image counts, and 20-image gallery generated |
 | Dot-centre diagnostic | Done | Best centre F1 0.885; 0.880 recall at confidence 0.25 and 16 px tolerance |
 | Detection inference contract | Partial | Rail CLI preserves prediction confidence, centres, inliers, and JSON diagnostics; full ball schema remains |
@@ -52,9 +52,10 @@ This file is the short operational tracker. `TABLE_DETECTION_PLAN.md` contains t
 - [x] Added a downstream confidence sweep from `0.05` to `0.50`, using one YOLO pass and ground-truth corner agreement.
 - [x] Selected confidence `0.05` as the provisional Dot-candidate threshold: 20/20 produce four rails and 19/20 are structurally valid and agree with labelled corners.
 - [x] Smoke-tested YOLO11n at 960 px for 3 epochs with batch 1; peak reported GPU memory was about 0.68 GB.
-- [x] Ran the controlled 960 px retrain for 60 complete epochs and selected epoch 49 using only validation fitness.
-- [x] Independently reloaded and validated the 960 px `best.pt`; Dot recall improved from `0.640` to `0.762`.
-- [ ] Repeat the Dot-centre and downstream rail-confidence sweeps with the 960 px checkpoint after repairing the local Python launcher.
+- [x] Resumed the controlled 960 px retrain and allowed Ultralytics early stopping to finish the run normally.
+- [x] Selected displayed epoch 68 using only validation fitness (`0.723092`).
+- [x] Reloaded and validated the final 960 px `best.pt`; Dot recall improved from `0.640` to `0.786` and Dot mAP50 from `0.640` to `0.763`.
+- [ ] Repeat the Dot-centre and downstream rail-confidence sweeps with the final 960 px checkpoint.
 - [x] Kept the matched-view geometry evaluation set untouched pending an explicit grouped development/evaluation split.
 - [x] Kept the held-out test split untouched.
 
@@ -77,16 +78,16 @@ The controlled change was input resolution `640 -> 960`; YOLO11n, the train/vali
 
 | Class | Precision | Recall | mAP50 | mAP50-95 |
 |---|---:|---:|---:|---:|
-| All | 0.904 | 0.858 | 0.872 | 0.704 |
-| Black | 0.943 | 0.824 | 0.842 | 0.754 |
-| Cue | 0.908 | 0.988 | 0.977 | 0.881 |
-| Dot | 0.846 | 0.762 | 0.743 | 0.362 |
-| Solid | 0.958 | 0.845 | 0.886 | 0.747 |
-| Striped | 0.865 | 0.872 | 0.912 | 0.774 |
+| All | 0.915 | 0.875 | 0.892 | 0.704 |
+| Black | 0.945 | 0.853 | 0.890 | 0.760 |
+| Cue | 0.886 | 1.000 | 0.990 | 0.879 |
+| Dot | 0.868 | 0.786 | 0.763 | 0.352 |
+| Solid | 0.929 | 0.856 | 0.888 | 0.758 |
+| Striped | 0.950 | 0.881 | 0.927 | 0.773 |
 
-Dot improved by `+0.013` precision, `+0.122` recall, `+0.103` mAP50, and `+0.054` mAP50-95. Overall mAP50-95 improved by `+0.039`. These are useful gains on the same validation split, but the per-class changes are noisy because validation contains only 20 images.
+Against the 640 px baseline, Dot improved by `+0.035` precision, `+0.146` recall, and `+0.123` mAP50; Dot mAP50-95 improved by `+0.044`. Overall recall improved by `+0.069`, mAP50 by `+0.038`, and mAP50-95 by `+0.039`. These are useful gains on the same validation split, but the per-class changes are noisy because validation contains only 20 images.
 
-Training completed through epoch 60. Repeated Windows commit-memory pressure caused OpenCV image-buffer allocation errors while starting later epochs, so the run was stopped rather than changing AMP or resolution mid-experiment. The chosen epoch-49 checkpoint predates those failures and had the highest Ultralytics validation fitness (`0.721643`). Independent validation reproduced the class metrics above.
+The initially interrupted run was resumed from epoch 61. Two attempts encountered Windows system-memory pressure during OpenCV image allocation, but after memory was freed the unchanged run continued and exited successfully through Ultralytics early stopping. The selected checkpoint is displayed epoch 68 (CSV epoch index 67), which had the highest validation fitness (`0.723092`). The metrics above are from Ultralytics' final validation of the stripped `best.pt`; the held-out test split remains untouched.
 
 Decision: promote the 960 px checkpoint as the new Dot-detector candidate, but do not replace the 640-specific geometry confidence `0.05` until Dot-centre and rail-confidence sweeps are repeated with the new model.
 
@@ -185,7 +186,6 @@ The 960 px retrain has now improved standard Dot metrics. The rail results above
 
 ## Next checkpoint — compare 960 px downstream utility
 
-- [ ] Repair or recreate `.venv` so its Python launcher resolves correctly.
 - [ ] Repeat the Dot-centre distance/confidence sweep at the 960 px model scale.
 - [ ] Repeat the rail-confidence sweep using the unchanged geometry fitter.
 - [ ] Compare the 640 and 960 models on rail success, corner error, and failure cases.
