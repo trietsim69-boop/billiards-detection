@@ -1,7 +1,7 @@
 # Table Detection Progress
 
 Last updated: 2026-08-24
-Current position: Phase 2, Checkpoint 2.4 — four-rail prototype complete; canonical dot correspondence is next
+Current position: 960 px Dot-focused retrain complete; repeat downstream Dot-centre and rail sweeps before canonical correspondence
 
 This file is the short operational tracker. `TABLE_DETECTION_PLAN.md` contains the explanations, design decisions, and executable checkpoint details.
 
@@ -10,16 +10,17 @@ This file is the short operational tracker. `TABLE_DETECTION_PLAN.md` contains t
 | Area | Status | Evidence |
 |---|---|---|
 | Dataset preparation and audit | Done | Processed dataset, split manifest, and audit report exist |
-| Local YOLO/CUDA environment | Done | Python 3.12, CUDA PyTorch, Ultralytics and OpenCV verified |
+| Local YOLO/CUDA environment | Needs repair | Training and validation completed, but `.venv` now references a missing base Python executable; custom diagnostics are paused |
 | Tiny overfit diagnostic | Done | Representative 10-image subset successfully memorized |
 | Two-to-three-epoch smoke tests | Done | YOLO11n tested at 512 and 640; 640 selected |
 | Reproducible YOLO11n baseline | Done | Best epoch 46; validation mAP50 0.854 and mAP50-95 0.665 |
+| Higher-resolution YOLO11n retrain | Done (resource-limited) | 60 epochs completed; 960 px candidate selected at epoch 49; Dot recall 0.762 and Dot mAP50 0.743 |
 | Validation error analysis | Done | Threshold sweep, size metrics, per-image counts, and 20-image gallery generated |
 | Dot-centre diagnostic | Done | Best centre F1 0.885; 0.880 recall at confidence 0.25 and 16 px tolerance |
 | Detection inference contract | Partial | Rail CLI preserves prediction confidence, centres, inliers, and JSON diagnostics; full ball schema remains |
 | Ground-truth-dot rail fitting | Done | Four correct lines recovered on 20/20 validation images; 19/20 pass the clear-image area gate |
 | Homography and normalized projection | Not started | Depends on verified rail fitting |
-| Predicted-dot geometry integration | Started | Four structurally valid YOLO-driven rail fits on 11/20 validation images at confidence 0.25 |
+| Predicted-dot geometry integration | Started | At Dot confidence 0.05, four rails are produced on 20/20 validation images and 19/20 pass structure plus label agreement |
 | Manual four-corner fallback | Not started | Final Phase 2 prototype checkpoint |
 
 ## Completed work
@@ -47,13 +48,19 @@ This file is the short operational tracker. `TABLE_DETECTION_PLAN.md` contains t
 - [x] Added synthetic geometry tests covering perspective, outliers, shuffled points, and insufficient input.
 - [x] Added `scripts/fit_table_rails.py` for both labelled images and unlabeled YOLO inference.
 - [x] Recovered the correct four rails from ground-truth Dots on all 20 validation images; the distant-table case is rejected only by the configured area gate.
-- [x] Ran the unchanged fitter on YOLO Dot centres: 11/20 images produce structurally valid four-rail quadrilaterals.
+- [x] Ran the unchanged fitter on YOLO Dot centres at confidence `0.25`: 11/20 images produce structurally valid four-rail quadrilaterals.
+- [x] Added a downstream confidence sweep from `0.05` to `0.50`, using one YOLO pass and ground-truth corner agreement.
+- [x] Selected confidence `0.05` as the provisional Dot-candidate threshold: 20/20 produce four rails and 19/20 are structurally valid and agree with labelled corners.
+- [x] Smoke-tested YOLO11n at 960 px for 3 epochs with batch 1; peak reported GPU memory was about 0.68 GB.
+- [x] Ran the controlled 960 px retrain for 60 complete epochs and selected epoch 49 using only validation fitness.
+- [x] Independently reloaded and validated the 960 px `best.pt`; Dot recall improved from `0.640` to `0.762`.
+- [ ] Repeat the Dot-centre and downstream rail-confidence sweeps with the 960 px checkpoint after repairing the local Python launcher.
 - [x] Kept the matched-view geometry evaluation set untouched pending an explicit grouped development/evaluation split.
 - [x] Kept the held-out test split untouched.
 
 ## Latest detector evidence
 
-### Standard validation metrics
+### Standard validation metrics — 640 px baseline
 
 | Class | Precision | Recall | mAP50 | mAP50-95 |
 |---|---:|---:|---:|---:|
@@ -63,6 +70,25 @@ This file is the short operational tracker. `TABLE_DETECTION_PLAN.md` contains t
 | Dot | 0.833 | 0.640 | 0.640 | 0.308 |
 | Solid | 0.943 | 0.859 | 0.888 | 0.695 |
 | Striped | 0.947 | 0.832 | 0.884 | 0.720 |
+
+### Standard validation metrics — 960 px retrain
+
+The controlled change was input resolution `640 -> 960`; YOLO11n, the train/validation split, pretrained initialization, augmentation policy, seed, and validation data remained the same. Batch `1` was used as the memory-safe local setting. The test split remains untouched.
+
+| Class | Precision | Recall | mAP50 | mAP50-95 |
+|---|---:|---:|---:|---:|
+| All | 0.904 | 0.858 | 0.872 | 0.704 |
+| Black | 0.943 | 0.824 | 0.842 | 0.754 |
+| Cue | 0.908 | 0.988 | 0.977 | 0.881 |
+| Dot | 0.846 | 0.762 | 0.743 | 0.362 |
+| Solid | 0.958 | 0.845 | 0.886 | 0.747 |
+| Striped | 0.865 | 0.872 | 0.912 | 0.774 |
+
+Dot improved by `+0.013` precision, `+0.122` recall, `+0.103` mAP50, and `+0.054` mAP50-95. Overall mAP50-95 improved by `+0.039`. These are useful gains on the same validation split, but the per-class changes are noisy because validation contains only 20 images.
+
+Training completed through epoch 60. Repeated Windows commit-memory pressure caused OpenCV image-buffer allocation errors while starting later epochs, so the run was stopped rather than changing AMP or resolution mid-experiment. The chosen epoch-49 checkpoint predates those failures and had the highest Ultralytics validation fitness (`0.721643`). Independent validation reproduced the class metrics above.
+
+Decision: promote the 960 px checkpoint as the new Dot-detector candidate, but do not replace the 640-specific geometry confidence `0.05` until Dot-centre and rail-confidence sweeps are repeated with the new model.
 
 ### Error-gallery operating point
 
@@ -110,11 +136,16 @@ The same `fit_rails(dot_centres)` function was evaluated with two point sources.
 | Dot source | Four lines recovered | Structurally valid | Interpretation |
 |---|---:|---:|---|
 | Ground-truth labels | 20/20 | 19/20 | Geometry algorithm works; one distant table is below the 3% image-area gate |
-| YOLO at confidence 0.25 | 11/20 | 11/20 | Clear/full-dot prototype works; remaining images usually have only three sufficiently supported rails |
+| YOLO at confidence 0.25 | 11/20 | 11/20 | Detector-F1 operating point removes too many rail candidates |
+| YOLO at confidence 0.05 | 20/20 | 19/20 | RANSAC recovers the correct rails; the same distant table remains below the area gate |
 
 Every successful ground-truth fit has the expected support pattern: six dots on each long rail and three on each short rail, except the single image with one missing label (`6/3/5/3`). Successful YOLO fits may include extra collinear candidates, so their overlays and later homography residuals remain necessary validity checks.
 
-The current safety rule requires at least three supporting points per rail. It intentionally rejects a two-point fourth rail because any two false detections define a line. Missing-dot robustness is deferred until canonical spacing and homography checks can safely constrain that case.
+At confidence `0.05`, 19/20 fitted quadrilaterals pass both structural validation and ground-truth corner agreement. Their median corner error is `2.89` original-image pixels. The remaining image is not a wrong accepted result: it is explicitly rejected because the distant table occupies only `1.6%` of the image.
+
+The current safety rule requires at least three supporting points per rail. Low-confidence Dot candidates are retained for geometry, then line consensus rejects spatial outliers. This is why the best detector-F1 threshold (`0.25`) is not the best downstream rail threshold (`0.05`).
+
+The 960 px retrain has now improved standard Dot metrics. The rail results above still belong to the 640 px model, so confidence `0.05` remains provisional until the same geometry sweep is repeated with the new checkpoint.
 
 ## Current artifacts
 
@@ -125,6 +156,10 @@ The current safety rule requires at least three supporting points per rail. It i
 | Best detector | `outputs/detection/baseline-yolo11n-640/weights/best.pt` |
 | Baseline plots | `outputs/detection/baseline-yolo11n-640/` |
 | Independent validation | `outputs/detection/baseline-yolo11n-640-independent-val/` |
+| 960 px training configuration | `configs/train_yolo11n_960.yaml` |
+| 960 px best detector | `outputs/detection/baseline-yolo11n-960/weights/best.pt` |
+| 960 px training log | `outputs/detection/baseline-yolo11n-960/results.csv` |
+| 960 px independent validation report | `outputs/detection/baseline-yolo11n-960-independent-val/VALIDATION_REPORT.md` |
 | Error-analysis script | `scripts/analyze_detector_errors.py` |
 | Error-gallery report | `outputs/detection/baseline-yolo11n-640-error-analysis/ERROR_GALLERY.md` |
 | Worst-cases contact sheet | `outputs/detection/baseline-yolo11n-640-error-analysis/worst_cases.jpg` |
@@ -143,9 +178,22 @@ The current safety rule requires at least three supporting points per rail. It i
 | Ground-truth rail contact sheet | `outputs/geometry/validation-ground-truth-rails/contact_sheet.jpg` |
 | YOLO rail report | `outputs/geometry/validation-yolo-rails/RAIL_FITTING_REPORT.md` |
 | YOLO rail contact sheet | `outputs/geometry/validation-yolo-rails/contact_sheet.jpg` |
+| Rail-confidence sweep script | `scripts/sweep_rail_confidence.py` |
+| Rail-confidence sweep report | `outputs/geometry/rail-confidence-sweep/RAIL_CONFIDENCE_SWEEP.md` |
+| Rail-confidence sweep graph | `outputs/geometry/rail-confidence-sweep/confidence_sweep.png` |
 | Real-image testing guide | `REAL_IMAGE_TESTING.md` |
 
-## Next checkpoint — Phase 1.6
+## Next checkpoint — compare 960 px downstream utility
+
+- [ ] Repair or recreate `.venv` so its Python launcher resolves correctly.
+- [ ] Repeat the Dot-centre distance/confidence sweep at the 960 px model scale.
+- [ ] Repeat the rail-confidence sweep using the unchanged geometry fitter.
+- [ ] Compare the 640 and 960 models on rail success, corner error, and failure cases.
+- [ ] Select the detector checkpoint and Dot confidence used by canonical correspondence.
+
+Checkpoint completion condition: one detector/confidence pair is selected from both detector metrics and unchanged downstream geometry evidence.
+
+## Detection contract checkpoint — Phase 1.6
 
 - [ ] Define a stable JSON/Python schema for each raw detection.
 - [ ] Preserve original-image box and centre coordinates.
@@ -171,9 +219,9 @@ Checkpoint completion condition: the same image and model checkpoint always prod
 
 ## Deferred decisions
 
-- Final per-class confidence thresholds.
+- Final per-class confidence thresholds; Dot uses provisional geometry-specific confidence `0.05`.
 - Exact minimum per-rail dot coverage required for stable line fitting; the current detector is adequate only for the initial clear/full-dot prototype.
-- Whether the next controlled detector experiment should use higher input resolution or YOLO11s.
+- Whether YOLO11s is worth testing after the 960 px YOLO11n downstream comparison.
 - Final prototype acceptance thresholds.
 - Performance on the held-out detector test split.
 - Generalization to personal-phone images.

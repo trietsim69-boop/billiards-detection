@@ -29,8 +29,9 @@ From the repository root in PowerShell:
   --output outputs\geometry\real-image-test
 ```
 
-Quotes are important when the path contains spaces. The default YOLO confidence
-is `0.25`, read from `configs/geometry.yaml`.
+Quotes are important when the path contains spaces. The provisional Dot-candidate
+confidence is `0.05`, read from `configs/geometry.yaml`. It is intentionally low
+because downstream RANSAC rejects candidates that do not support a rail.
 
 ## Run a folder
 
@@ -75,16 +76,17 @@ homography or projected ball position is accurate; those are later checkpoints.
 | `quadrilateral_too_small` | The table occupies too little of the image for the current clear-image scope | Use a closer image or treat it as a later robustness case |
 | `corner_outside_allowed_margin` | Fitted lines intersect implausibly far outside the image | Treat the automatic result as invalid |
 
-For diagnosis only, a separate run may try a lower confidence without overwriting
-the baseline:
+For diagnosis only, a separate run may try a more conservative confidence without
+overwriting the baseline:
 
 ```powershell
 .\.venv\Scripts\python.exe scripts\fit_table_rails.py `
   --source "C:\path\to\your\table_image.jpg" `
   --mode yolo `
-  --confidence 0.20 `
-  --output outputs\geometry\real-image-test-conf020
+  --confidence 0.10 `
+  --output outputs\geometry\real-image-test-conf010
 ```
 
-Do not assume the lower threshold is better: it may add false Dot candidates that
-form convincing but incorrect lines. Keep both outputs and compare their overlays.
+Do not assume the higher threshold is better: validation rail success falls as
+low-confidence but geometrically correct dots are removed. Keep both outputs and
+compare their overlays.

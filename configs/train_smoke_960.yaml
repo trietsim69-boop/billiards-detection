@@ -1,0 +1,49 @@
+# Three-epoch capacity check for the controlled YOLO11n 960 experiment.
+# Run from the repository root with:
+#   yolo detect train cfg=configs/train_smoke_960.yaml project=outputs/detection
+
+task: detect
+mode: train
+
+model: yolo11n.pt
+data: data/processed/pix2pockets_v3/data.yaml
+
+imgsz: 960
+batch: 1
+nbs: 2
+epochs: 3
+patience: 3
+
+device: 0
+workers: 0
+cache: false
+amp: false
+seed: 42
+deterministic: true
+
+optimizer: auto
+pretrained: true
+
+# Match the 640 baseline so resolution is the intended experimental change.
+mosaic: 0.0
+mixup: 0.0
+copy_paste: 0.0
+cutmix: 0.0
+degrees: 0.0
+translate: 0.0
+scale: 0.0
+shear: 0.0
+perspective: 0.0
+flipud: 0.0
+fliplr: 0.5
+hsv_h: 0.015
+hsv_s: 0.4
+hsv_v: 0.3
+
+val: true
+plots: true
+save: true
+save_period: -1
+project: outputs/detection
+name: smoke-yolo11n-960
+exist_ok: false

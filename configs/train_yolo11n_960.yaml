@@ -1,0 +1,52 @@
+# Controlled higher-resolution retraining experiment for tiny rail dots.
+# Run from the repository root with:
+#   yolo detect train cfg=configs/train_yolo11n_960.yaml project=outputs/detection
+
+task: detect
+mode: train
+
+model: yolo11n.pt
+data: data/processed/pix2pockets_v3/data.yaml
+
+imgsz: 960
+batch: 1
+nbs: 2
+epochs: 100
+patience: 20
+
+device: 0
+workers: 0
+cache: false
+amp: false
+seed: 42
+deterministic: true
+
+optimizer: auto
+pretrained: true
+
+# Match configs/train.yaml; only resolution and the necessary memory-safe batch
+# size differ from the 640 baseline.
+mosaic: 0.0
+mixup: 0.0
+copy_paste: 0.0
+cutmix: 0.0
+degrees: 0.0
+translate: 0.0
+scale: 0.0
+shear: 0.0
+perspective: 0.0
+flipud: 0.0
+fliplr: 0.5
+hsv_h: 0.015
+hsv_s: 0.4
+hsv_v: 0.3
+
+val: true
+# Numeric validation still runs. Disabling plots avoids Windows commit-memory
+# pressure observed during the first local 960 px run.
+plots: false
+save: true
+save_period: -1
+project: outputs/detection
+name: baseline-yolo11n-960
+exist_ok: false

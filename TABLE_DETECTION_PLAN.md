@@ -1,6 +1,6 @@
 # Table Detection Plan
 
-Status: approved scope; implementation has not started  
+Status: implementation in progress; Phase 2 four-rail prototype complete  
 Scope: five-class YOLO11 detection followed by rail fitting, homography, and normalized ball projection  
 Initial image domain: championship and broadcast still images represented by the Pix2Pockets dataset
 
@@ -424,7 +424,9 @@ The repeatable analyzer `scripts/analyze_detector_errors.py` evaluated all 20 va
 - Small ball recall was also lower than medium ball recall, confirming a general small-object effect rather than an isolated Dot class-name problem.
 - The worst distant-table frame matched only 1 of 18 labelled dots. Several overlays also show near-overlapping predicted and labelled dot boxes that fail IoU because tiny boxes are sensitive to a few pixels of displacement.
 
-Therefore, confidence reduction alone is rejected as the next improvement. Keep IoU-based detection metrics for comparison, but later evaluate dot-centre error separately because rail fitting consumes centres rather than box area. Reports and the visual gallery are under `outputs/detection/baseline-yolo11n-640-error-analysis/`.
+Therefore, confidence reduction alone is rejected as a way to improve detector IoU/F1. Keep IoU-based detection metrics for comparison, but evaluate Dot confidence again through the downstream geometry objective because rail fitting consumes centres and can reject spatial outliers. Reports and the visual gallery are under `outputs/detection/baseline-yolo11n-640-error-analysis/`.
+
+Later downstream evidence confirmed this distinction: a validation rail sweep selected confidence `0.05` for Dot candidates. Despite poor detector-only precision at that threshold, four rail lines were recovered on 20/20 validation images, and 19/20 fits passed structural checks plus labelled-corner agreement. The one rejection is the distant-table case below the clear-image area gate. This is a geometry-specific Dot threshold, not a threshold for the four ball classes.
 
 ## 12. Checkpoint 1.6 — inference contract and post-processing
 
@@ -622,6 +624,10 @@ Do not assume opposite rails remain parallel in the image; perspective projectio
 - Adjacent intersections form a convex quadrilateral.
 - The quadrilateral covers a plausible portion of the image.
 - Each rail's inlier dots appear ordered along the visible rail.
+
+### Implementation result
+
+The input-agnostic fitter in `src/billiards/geometry.py` recovers four correct lines from ground-truth Dots on all 20 detector-validation images; 19/20 pass the clear-image area gate. With YOLO Dot candidates at confidence `0.05`, 20/20 produce four lines and 19/20 pass both structural validation and labelled-corner agreement. Median corner error for four-line results is `2.89` original-image pixels. Threshold-sweep evidence is saved under `outputs/geometry/rail-confidence-sweep/`.
 
 ## 19. Checkpoint 2.5 — match dots to the canonical table
 

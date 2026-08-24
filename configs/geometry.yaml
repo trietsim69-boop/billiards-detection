@@ -9,8 +9,9 @@ max_quad_area_fraction: 0.95
 corner_margin_ratio: 0.25
 min_adjacent_angle_degrees: 12.0
 
-# Candidate YOLO operating point from validation centre-distance analysis.
-# This remains a prototype setting until rail-level evidence is collected.
-prediction_confidence: 0.25
+# Dot-candidate operating point selected by downstream rail fitting on validation.
+# This deliberately favors recall; RANSAC rejects non-collinear candidates. It is
+# not a ball-class threshold and remains provisional until homography evaluation.
+prediction_confidence: 0.05
 prediction_nms_iou: 0.70
 imgsz: 640
