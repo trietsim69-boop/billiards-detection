@@ -1,8 +1,53 @@
 # Rail-First Detection Plan
 
-Status: planning complete; implementation not started  
+Status: initial rail-first path regressed; crop-aware fine-tuning evaluated after three completed epochs
 Branch: `rail-first-detection`  
 Scope: detect coarse table geometry before rail sights, normalize four rail regions, improve sight-centre recovery, and preserve a trustworthy bed-plane mapping
+
+### 2026-09-07 experimental checkpoint
+
+The first all-validation comparison is recorded in
+`outputs/geometry/rail-first/validation-960-20260907/REPORT.md`.
+It uses existing 960-pixel weights without retraining. A provisional image-only
+cloth locator supplies proposals on 14/20 images. At YOLO confidence 0.25 and
+8px centre tolerance at 960 scale, full-frame YOLO matches 324/359 labelled dots
+with 12 false positives; crop YOLO matches 61 with 5 false positives; the crop
+hybrid matches 92 with 47 false positives. The initial implementation is not
+promoted. Unit tests alone did not establish detection improvement.
+
+This is an early diagnostic, not completion of phases A-G below. Reviewed bed
+annotations, grouped geometry manifests, complete projective strip normalization,
+robust rail roles/lattice fitting, and geometry accuracy evaluation remain open.
+Test and geometry holdout images have not been used in this experiment.
+
+### 2026-09-07 crop-aware fine-tuning follow-up
+
+`outputs/experiments/crop-finetune-v1/REPORT.md` records the follow-up. Four
+overlapping, aspect-preserving rectangular crops supplement full-frame YOLO;
+they do not depend on the provisional cloth locator or rail lattice. Training
+uses independent copies of 155 original training frames plus 620 labelled crops,
+retaining all five classes. Three epochs completed, not the planned twelve:
+one at 960 pixels and two resumed at 640 after memory failures. Both saved
+checkpoints were evaluated at the same 960-pixel inference resolution.
+
+On all 20 validation images, at fixed full/crop confidences 0.25/0.50 and 8px
+centre tolerance, the original detector finds 324/359 dots with 12 false
+positives. Original-model crops improve this to 341 with 14 false positives.
+Keeping the original full-frame model and adding epoch-3 crop dots gives 343
+with 13 false positives: only two additional matches from retraining itself.
+Replacing the full-frame model with epoch 3 instead gives 343 matches with 31
+false positives. The original default checkpoint therefore remains unchanged.
+Supplementary crops should be Dot-only if integrated: adding crop ball classes
+also increased several ball-class false-positive counts.
+
+The unchanged rail fitter accepts 14/20 original, 16/20 original-plus-crop, and
+17/20 original-plus-epoch-3-crop results. This is not reviewed bed-plane accuracy
+or sealed generalization evidence. Eleven of the sixteen remaining misses in
+the last variant are in one distant-table validation image. The next training
+experiment should maintain a consistent high-resolution scale on hardware with
+sufficient memory and target small/distant training examples. Phases A-G remain
+open; neither the normalized rail-first path nor a new production model has
+been promoted.
 
 ## 1. Goal
 
@@ -530,4 +575,3 @@ changes. Generated evaluation artifacts remain under `outputs/`.
 - `TABLE_DETECTION_PLAN.md` remains the broader detector and geometry plan.
 - `TABLE_DETECTION_PROGRESS.md` records the current 640/960 detector and
   four-line-fitting evidence.
-
