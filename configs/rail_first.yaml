@@ -1,0 +1,13 @@
+# Initial rail-first classical candidate settings. Keep provisional values
+# dataset-independent until validation metrics select a final operating point.
+strip_long_resolution: 768
+strip_depth_resolution: 96
+inner_margin_ratio: 0.04
+cap_depth_ratio: 0.18
+min_value: 145
+max_saturation: 105
+local_contrast: 14.0
+lattice_tolerance: 0.095
+lattice_residual: 0.075
+min_long_support: 3
+min_short_support: 2
