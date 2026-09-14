@@ -1,7 +1,7 @@
 # Table Detection Progress
 
-Last updated: 2026-08-24
-Current position: 960 px Dot-focused retrain complete; repeat downstream Dot-centre and rail sweeps before canonical correspondence
+Last updated: 2026-09-12
+Current position: crop-aware retraining evaluated after 3 completed epochs; retain the original 960 px full-frame detector and consider retrained Dot-only crop supplements; no replacement promoted
 
 This file is the short operational tracker. `TABLE_DETECTION_PLAN.md` contains the explanations, design decisions, and executable checkpoint details.
 
@@ -16,11 +16,14 @@ This file is the short operational tracker. `TABLE_DETECTION_PLAN.md` contains t
 | Reproducible YOLO11n baseline | Done | Best epoch 46; validation mAP50 0.854 and mAP50-95 0.665 |
 | Higher-resolution YOLO11n retrain | Done | Resumed run stopped normally via patience; best checkpoint at displayed epoch 68, with Dot recall 0.786 and Dot mAP50 0.763 |
 | Validation error analysis | Done | Threshold sweep, size metrics, per-image counts, and 20-image gallery generated |
-| Dot-centre diagnostic | Done | Best centre F1 0.885; 0.880 recall at confidence 0.25 and 16 px tolerance |
+| Dot-centre diagnostic | Done on validation | At 960 px and 8 px tolerance, original full frame plus epoch-3 crop dots gives recall 0.955 and F1 0.959; older 640 px metrics are retained below |
+| Initial rail-first inference | Evaluated; not promoted | Normalized rail-crop YOLO regressed to 61/359 matched dots versus 324/359 full-frame matches at confidence 0.25 |
+| Aspect-preserving crop inference | Evaluated | Without retraining, original full-frame plus crop detections finds 341/359 dots with 14 false positives |
+| Crop-aware fine-tuning | Partial training; evaluation complete | 3 of 12 planned epochs completed before memory failures; original full frame plus epoch-3 crop dots finds 343/359 with 13 false positives |
 | Detection inference contract | Partial | Rail CLI preserves prediction confidence, centres, inliers, and JSON diagnostics; full ball schema remains |
 | Ground-truth-dot rail fitting | Done | Four correct lines recovered on 20/20 validation images; 19/20 pass the clear-image area gate |
 | Homography and normalized projection | Not started | Depends on verified rail fitting |
-| Predicted-dot geometry integration | Started | At Dot confidence 0.05, four rails are produced on 20/20 validation images and 19/20 pass structure plus label agreement |
+| Predicted-dot geometry integration | Started | Latest fixed-settings 960 px crop comparison: 14/20 original, 16/20 original-plus-crop, and 17/20 original-plus-epoch-3-crop fits are structurally valid; earlier 640 px confidence sweep remains separate |
 | Manual four-corner fallback | Not started | Final Phase 2 prototype checkpoint |
 
 ## Completed work
@@ -55,11 +58,75 @@ This file is the short operational tracker. `TABLE_DETECTION_PLAN.md` contains t
 - [x] Resumed the controlled 960 px retrain and allowed Ultralytics early stopping to finish the run normally.
 - [x] Selected displayed epoch 68 using only validation fitness (`0.723092`).
 - [x] Reloaded and validated the final 960 px `best.pt`; Dot recall improved from `0.640` to `0.786` and Dot mAP50 from `0.640` to `0.763`.
-- [ ] Repeat the Dot-centre and downstream rail-confidence sweeps with the final 960 px checkpoint.
+- [x] Evaluated the original 960 px checkpoint and both saved crop-aware checkpoints on all 20 validation images, with centre tolerances 4/8/12 px and a confidence grid.
+- [x] Compared normalized rail-first inference with unchanged full-frame YOLO; recorded the regression without promoting it.
+- [x] Prepared 775 crop-training examples from 155 originals plus 620 overlapping labelled tiles; retained all five classes and original split membership.
+- [x] Completed 3 crop-aware fine-tuning epochs and independently evaluated epoch-1 and epoch-3 checkpoints at 960 px; the planned 12 epochs did not complete.
+- [x] Ran unchanged rail fitting on the fixed-settings original/crop/retrained comparisons; recorded validity separately from bed-plane accuracy.
+- [x] Verified all 20 unit tests passed and all 175 source image/label pairs plus the original checkpoint remained unchanged after the experiment.
+- [ ] Complete a geometry-specific 960 px rail-confidence selection with corner-agreement checks; the crop comparison is not a final geometry operating point.
 - [x] Kept the matched-view geometry evaluation set untouched pending an explicit grouped development/evaluation split.
 - [x] Kept the held-out test split untouched.
 
 ## Latest detector evidence
+
+### Crop-aware retraining comparison — experiment 2026-09-07
+
+All 20 validation images, 359 labelled dots. Every before/after inference run uses
+960 pixels and one-to-one centre matching at 8 px tolerance. Full-frame confidence
+0.25 and supplementary crop confidence 0.50 were fixed before training. These are
+Dot-centre metrics, not standard box-IoU mAP or sealed-test results.
+
+| Method | TP | FP | FN | Recall | F1 | Structurally valid rail fits |
+|---|---:|---:|---:|---:|---:|---:|
+| Original 960 px full frame | 324 | 12 | 35 | 90.3% | 0.9324 | 14/20 |
+| Original full frame + original crops | 341 | 14 | 18 | 95.0% | 0.9552 | 16/20 |
+| Original full frame + epoch-1 crops | 345 | 18 | 14 | 96.1% | 0.9557 | 18/20 |
+| Original full frame + epoch-3 crops | 343 | 13 | 16 | 95.5% | 0.9594 | 17/20 |
+| Epoch-1 full frame + epoch-1 crops | 347 | 35 | 12 | 96.7% | 0.9366 | 18/20 |
+| Epoch-3 full frame + epoch-3 crops | 343 | 31 | 16 | 95.5% | 0.9359 | 17/20 |
+
+Training used 155 original frames plus four overlapping, aspect-preserving tiles
+per frame (775 training examples), with all five classes labelled. Only three
+epochs completed: epoch 1 at 960 pixels, then epochs 2-3 resumed at 640 with
+optimizer state after memory exhaustion. Further memory failures stopped training
+during epoch 4. The planned twelve epochs were not completed. `best.pt` is epoch 1;
+`last.pt` is epoch 3. Mixed-resolution trainer scores cannot fairly rank them, so
+both checkpoints were re-evaluated at the same 960-pixel inference resolution.
+
+Decision: retain the original 960 px full-frame detector. The conservative
+experimental supplement is epoch-3 crop detections for **Dot only**: compared with
+cropping without retraining, it adds just two matches and removes one false
+positive. Most of the gain comes from cropping itself. Replacing the full-frame
+detector increases false positives; applying crop supplements to ball classes
+also increased several ball-class false-positive counts. No new default model
+or production pipeline was promoted.
+
+Epoch-1 supplements offer higher recall and one more valid rail fit, but five
+more false positives than epoch 3. The secondary confidence grid also contains a
+promising epoch-1 full/crop setting of 0.50/0.50 (345 TP, 9 FP, F1 0.9677); it is
+not the preselected primary comparison or a validated production operating point.
+
+Remaining limitations: 11 of the 16 misses with epoch-3 supplements are in one
+distant-table image. Four crops add four inference passes, and a mixed-model
+variant needs two checkpoints. Rail-fit validity is structural evidence only;
+median Dot-oracle corner error is 1.87 px for original crops and 2.10 px for
+epoch-3 supplements over different accepted subsets, so improved bed/corner
+accuracy has not been established. Validation guided selection; test and geometry
+holdout remain untouched. A future training run should keep a consistent high
+resolution on hardware with sufficient memory and target small/distant training
+examples and labelled hard negatives.
+
+The earlier normalized rail-first path remains unpromoted: crop YOLO found only
+61/359 dots with 5 false positives, and the crop hybrid found 92 with 47, at
+confidence 0.25. The rectangular crop experiment above bypasses that path's
+provisional table locator and rail/lattice filtering.
+
+Evidence: [crop-aware retraining report](outputs/experiments/crop-finetune-v1/REPORT.md),
+[matched-image geometry comparison](outputs/experiments/crop-finetune-v1/comparison/REPORT.md),
+and [initial rail-first regression report](outputs/geometry/rail-first/validation-960-20260907/REPORT.md).
+The remaining sections preserve the earlier baseline results and their original
+evaluation settings.
 
 ### Standard validation metrics — 640 px baseline
 
@@ -91,7 +158,7 @@ The initially interrupted run was resumed from epoch 61. Two attempts encountere
 
 Decision: promote the 960 px checkpoint as the new Dot-detector candidate, but do not replace the 640-specific geometry confidence `0.05` until Dot-centre and rail-confidence sweeps are repeated with the new model.
 
-### Error-gallery operating point
+### Earlier error-gallery operating point — 640 px baseline
 
 Confidence `0.50` maximized Dot F1 among the swept thresholds.
 
@@ -111,7 +178,7 @@ What we learned:
 - Some predicted dots are near the correct location but fail IoU `0.50`; dot-centre error must therefore be measured before deciding whether those predictions are unusable for rail fitting.
 - Distant, small-table broadcasts are the clearest failure cases.
 
-### Dot-centre diagnostic
+### Earlier Dot-centre diagnostic — 640 px baseline
 
 Box IoU understates how useful the current predictions are for geometry. Centre matching uses a one-to-one assignment and measures distance after letterboxing to the model's 640-pixel scale.
 
@@ -130,7 +197,7 @@ What we learned:
 - One distant-table image remains a major failure: only 8 of its 18 labelled dots match at confidence `0.25` and tolerance `16`.
 - Decision: retain this YOLO11n checkpoint for the clear/full-dot prototype and begin geometry with ground-truth dots. Do not yet treat it as a robust automatic detector for every broadcast image; revisit higher-resolution training after the geometry stage defines its actual minimum-dot requirements.
 
-## Latest rail-fitting evidence
+## Earlier rail-fitting evidence — 640 px baseline
 
 The same `fit_rails(dot_centres)` function was evaluated with two point sources. No rail was manually drawn.
 
@@ -154,13 +221,20 @@ The 960 px retrain has now improved standard Dot metrics. The rail results above
 |---|---|
 | Main plan | `TABLE_DETECTION_PLAN.md` |
 | Training configuration | `configs/train.yaml` |
-| Best detector | `outputs/detection/baseline-yolo11n-640/weights/best.pt` |
+| Historical 640 px detector | `outputs/detection/baseline-yolo11n-640/weights/best.pt` |
 | Baseline plots | `outputs/detection/baseline-yolo11n-640/` |
 | Independent validation | `outputs/detection/baseline-yolo11n-640-independent-val/` |
 | 960 px training configuration | `configs/train_yolo11n_960.yaml` |
 | 960 px best detector | `outputs/detection/baseline-yolo11n-960/weights/best.pt` |
 | 960 px training log | `outputs/detection/baseline-yolo11n-960/results.csv` |
 | 960 px independent validation report | `outputs/detection/baseline-yolo11n-960-independent-val/VALIDATION_REPORT.md` |
+| Latest crop-aware results | `outputs/experiments/crop-finetune-v1/REPORT.md` |
+| Crop-aware training configuration | `configs/train_yolo11n_crop_finetune.yaml` |
+| Crop-aware run status and interruptions | `outputs/experiments/crop-finetune-v1/RUN_NOTES.md` |
+| Experimental epoch-3 crop checkpoint | `outputs/detection/yolo11n-960-crop-finetune-v1/weights/last.pt` |
+| Experimental epoch-1 checkpoint | `outputs/detection/yolo11n-960-crop-finetune-v1/weights/best.pt` |
+| Crop comparison and geometry diagnostics | `outputs/experiments/crop-finetune-v1/comparison/REPORT.md` |
+| Initial rail-first regression report | `outputs/geometry/rail-first/validation-960-20260907/REPORT.md` |
 | Error-analysis script | `scripts/analyze_detector_errors.py` |
 | Error-gallery report | `outputs/detection/baseline-yolo11n-640-error-analysis/ERROR_GALLERY.md` |
 | Worst-cases contact sheet | `outputs/detection/baseline-yolo11n-640-error-analysis/worst_cases.jpg` |
@@ -186,8 +260,9 @@ The 960 px retrain has now improved standard Dot metrics. The rail results above
 
 ## Next checkpoint — compare 960 px downstream utility
 
-- [ ] Repeat the Dot-centre distance/confidence sweep at the 960 px model scale.
-- [ ] Repeat the rail-confidence sweep using the unchanged geometry fitter.
+- [x] Compare original and crop-aware checkpoints using a 960 px Dot-centre distance/confidence grid on all validation images.
+- [x] Compare unchanged rail fitting at the fixed full-frame/crop confidences 0.25/0.50.
+- [ ] Complete the geometry-specific rail-confidence selection using the unchanged fitter and corner-agreement checks.
 - [ ] Compare the 640 and 960 models on rail success, corner error, and failure cases.
 - [ ] Select the detector checkpoint and Dot confidence used by canonical correspondence.
 
