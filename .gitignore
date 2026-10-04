@@ -1,6 +1,6 @@
 .venv/
 **/labels.cache
-outputs/
 runs/
 *.pt
+!outputs/**/*.pt
 __pycache__/

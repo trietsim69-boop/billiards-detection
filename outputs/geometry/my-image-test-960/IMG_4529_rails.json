@@ -1,0 +1,102 @@
+{
+  "image": "D:\\Downloads\\IMG_4529.jpeg",
+  "dot_source": "yolo",
+  "prediction_confidence": 0.05,
+  "image_width": 4032,
+  "image_height": 3024,
+  "geometry": {
+    "method": "automatic_dots",
+    "valid": false,
+    "input_dot_count": 11,
+    "points": [
+      {
+        "x": 1825.5752563476562,
+        "y": 964.8802185058594,
+        "confidence": 0.8708966374397278,
+        "source_index": 14
+      },
+      {
+        "x": 3914.9345703125,
+        "y": 1495.5391845703125,
+        "confidence": 0.8434349894523621,
+        "source_index": 15
+      },
+      {
+        "x": 2427.5450439453125,
+        "y": 979.9893493652344,
+        "confidence": 0.6912004947662354,
+        "source_index": 17
+      },
+      {
+        "x": 3017.8079833984375,
+        "y": 994.751953125,
+        "confidence": 0.6750304698944092,
+        "source_index": 18
+      },
+      {
+        "x": 1524.5382080078125,
+        "y": 954.4208679199219,
+        "confidence": 0.5959997177124023,
+        "source_index": 20
+      },
+      {
+        "x": 2725.3179931640625,
+        "y": 985.9916076660156,
+        "confidence": 0.5599539875984192,
+        "source_index": 21
+      },
+      {
+        "x": 1223.8121337890625,
+        "y": 948.0571594238281,
+        "confidence": 0.44512203335762024,
+        "source_index": 23
+      },
+      {
+        "x": 3643.4036865234375,
+        "y": 1237.5323486328125,
+        "confidence": 0.4191182553768158,
+        "source_index": 24
+      },
+      {
+        "x": 1523.7416381835938,
+        "y": 950.5088806152344,
+        "confidence": 0.24351003766059875,
+        "source_index": 25
+      },
+      {
+        "x": 360.6954803466797,
+        "y": 1417.2769165039062,
+        "confidence": 0.17403167486190796,
+        "source_index": 27
+      },
+      {
+        "x": 2719.9342041015625,
+        "y": 985.7250061035156,
+        "confidence": 0.06124844774603844,
+        "source_index": 28
+      }
+    ],
+    "rail_lines": [],
+    "corners_image_xy": [],
+    "dot_inliers": [],
+    "outlier_indices": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10
+    ],
+    "quadrilateral_area_px": null,
+    "quadrilateral_area_fraction": null,
+    "ransac_distance_threshold_px": 16.128,
+    "warnings": [
+      "insufficient_dot_points:11<12"
+    ]
+  }
+}

@@ -53,7 +53,7 @@ A low confidence works best for geometry: line fitting discards stray candidates
 
 Developed on Windows with an NVIDIA MX550 (2 GB VRAM) in a project `.venv`: Python 3.12, PyTorch 2.9.0 + CUDA 12.6, torchvision 0.24.0, Ultralytics 8.4.124, OpenCV 5.0, PyYAML, matplotlib and pytest. Install the CUDA build of PyTorch from pytorch.org first, then `pip install ultralytics==8.4.124 pytest`.
 
-Trained weights and run outputs live in `outputs/`, which is gitignored. With 2 GB VRAM, 960 px training needs batch 1, `workers=0` and `plots=false`; keep `amp=False`, because the AMP check fails on this GPU.
+Trained weights and run outputs are committed under `outputs/`; the best model is `outputs/detection/baseline-yolo11n-960/weights/best.pt`. With 2 GB VRAM, 960 px training needs batch 1, `workers=0` and `plots=false`; keep `amp=False`, because the AMP check fails on this GPU.
 
 ## Usage
 
@@ -90,6 +90,7 @@ configs/geometry.yaml            rail-fitting thresholds and Dot confidence
 src/billiards/geometry.py        four-rail fitting from dot centres
 scripts/                         evaluation and rail-fitting CLIs
 tests/
+outputs/detection/baseline-yolo11n-960/   best weights, per-epoch results.csv, training args
 TABLE_DETECTION_PROGRESS.md      full experiment log and decisions
 ```
 

@@ -1,0 +1,2 @@
+image,dot_source,dot_count,rail_count,rail_supports,assigned_dot_count,outlier_count,area_fraction,valid,warnings,overlay,json
+IMG_4529.jpeg,yolo,11,0,,0,11,,False,insufficient_dot_points:11<12,IMG_4529_rails.jpg,IMG_4529_rails.json

@@ -43,9 +43,9 @@ NVIDIA MX550 with 2 GB VRAM, Windows with low commit headroom. 960 px training n
 
 ## Experiment conventions
 
-- Each run writes to a fresh directory under `outputs/` (gitignored, so `configs/` is the only tracked record of a recipe). Save weights SHA256, config and a source snapshot with the results.
+- Each run writes to a fresh directory under `outputs/`, which is tracked in git, weights included. GitHub rejects files over 100 MB, so keep generated datasets and large galleries out of commits. Save weights SHA256, config and a source snapshot with the results.
 - Keep every image in the denominator; report rejections and false accepts. Freeze thresholds before any holdout run.
-- `TABLE_DETECTION_PROGRESS.md` is authoritative for results. Only the 960 artifacts remain in `outputs/`, so its links to 640, crop and rail-first evidence are dead; the recorded numbers stand. `baseline-yolo11n-960-independent-val/VALIDATION_REPORT.md` predates the resume and cites epoch 49.
+- `TABLE_DETECTION_PROGRESS.md` is authoritative for results. Only the 960 artifacts were kept in `outputs/`, so its links to 640, crop and rail-first evidence are dead; the recorded numbers stand. `baseline-yolo11n-960-independent-val/VALIDATION_REPORT.md` predates the resume and cites epoch 49.
 
 ## Docs
 
