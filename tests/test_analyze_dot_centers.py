@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import unittest
 
-from scripts.analyze_detector_errors import Detection
-from scripts.analyze_dot_centers import (
+from analyze_detector_errors import Detection
+from analyze_dot_centers import (
     center_distance_model_px,
     inference_gain,
     match_centers,

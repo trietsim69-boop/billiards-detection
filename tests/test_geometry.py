@@ -1,17 +1,10 @@
 from __future__ import annotations
 
-from pathlib import Path
-import sys
 import unittest
 
 import numpy as np
 
-
-SRC_ROOT = Path(__file__).resolve().parents[1] / "src"
-if str(SRC_ROOT) not in sys.path:
-    sys.path.insert(0, str(SRC_ROOT))
-
-from billiards.geometry import (  # noqa: E402
+from billiards.geometry import (
     PointObservation,
     RailFitConfig,
     fit_rails,

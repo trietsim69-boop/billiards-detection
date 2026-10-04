@@ -8,7 +8,6 @@ confidence; the same raw prediction set is filtered at every higher threshold.
 from __future__ import annotations
 
 import argparse
-import csv
 from itertools import permutations
 import math
 from pathlib import Path
@@ -21,19 +20,19 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np
-from ultralytics import YOLO
 
+from analyze_detector_errors import write_csv  # noqa: E402
 from fit_table_rails import (  # noqa: E402
-    create_contact_sheet,
     find_images,
     load_labelled_dots,
     load_settings,
     prediction_points,
     rail_config,
+    rail_contact_sheet,
     render_result,
     yolo_dot_class_id,
 )
-from billiards.geometry import PointObservation, RailFitResult, fit_rails  # noqa: E402
+from billiards.geometry import fit_rails  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:
@@ -48,7 +47,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--weights",
         type=Path,
-        default=Path("outputs/detection/baseline-yolo11n-640/weights/best.pt"),
+        default=Path("outputs/detection/baseline-yolo11n-960/weights/best.pt"),
     )
     parser.add_argument(
         "--config", type=Path, default=Path("configs/geometry.yaml")
@@ -95,38 +94,11 @@ def corner_alignment_error(
     return best
 
 
-def write_csv(path: Path, rows: Sequence[dict[str, object]]) -> None:
-    if not rows:
-        return
-    with path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=list(rows[0].keys()))
-        writer.writeheader()
-        writer.writerows(rows)
-
-
-def optional_mean(values: Sequence[float]) -> float | None:
-    return mean(values) if values else None
-
-
-def optional_median(values: Sequence[float]) -> float | None:
-    return median(values) if values else None
-
-
-def optional_p95(values: Sequence[float]) -> float | None:
-    return float(np.percentile(values, 95)) if values else None
-
-
 def summarize(
-    thresholds: Sequence[float],
-    per_image_rows: Sequence[dict[str, object]],
+    rows_by_threshold: dict[float, list[dict[str, object]]],
 ) -> list[dict[str, object]]:
     summary_rows: list[dict[str, object]] = []
-    for threshold in thresholds:
-        rows = [
-            row
-            for row in per_image_rows
-            if math.isclose(float(row["confidence"]), threshold)
-        ]
+    for threshold, rows in rows_by_threshold.items():
         dot_counts = [int(row["dot_count"]) for row in rows]
         corner_errors = [
             float(row["corner_mean_error_px"])
@@ -138,9 +110,7 @@ def summarize(
                 "confidence": threshold,
                 "images": len(rows),
                 "four_rail_count": sum(int(row["rail_count"]) == 4 for row in rows),
-                "structurally_valid_count": sum(
-                    bool(row["structurally_valid"]) for row in rows
-                ),
+                "structurally_valid_count": sum(bool(row["valid"]) for row in rows),
                 "agrees_0_5pct_count": sum(
                     bool(row["agrees_0_5pct"]) for row in rows
                 ),
@@ -148,15 +118,19 @@ def summarize(
                     bool(row["agrees_1pct"]) for row in rows
                 ),
                 "valid_and_agrees_1pct_count": sum(
-                    bool(row["structurally_valid"])
-                    and bool(row["agrees_1pct"])
-                    for row in rows
+                    bool(row["valid"]) and bool(row["agrees_1pct"]) for row in rows
                 ),
-                "mean_dot_count": optional_mean(dot_counts),
-                "median_dot_count": optional_median(dot_counts),
-                "mean_corner_error_px_when_four_rails": optional_mean(corner_errors),
-                "median_corner_error_px_when_four_rails": optional_median(corner_errors),
-                "p95_corner_error_px_when_four_rails": optional_p95(corner_errors),
+                "mean_dot_count": mean(dot_counts) if dot_counts else None,
+                "median_dot_count": median(dot_counts) if dot_counts else None,
+                "mean_corner_error_px_when_four_rails": (
+                    mean(corner_errors) if corner_errors else None
+                ),
+                "median_corner_error_px_when_four_rails": (
+                    median(corner_errors) if corner_errors else None
+                ),
+                "p95_corner_error_px_when_four_rails": (
+                    float(np.percentile(corner_errors, 95)) if corner_errors else None
+                ),
             }
         )
     return summary_rows
@@ -259,6 +233,8 @@ def markdown_report(
 
 
 def main() -> int:
+    from ultralytics import YOLO
+
     args = parse_args()
     thresholds = sorted(set(float(value) for value in args.thresholds))
     if not thresholds or any(not 0.0 <= value <= 1.0 for value in thresholds):
@@ -293,8 +269,7 @@ def main() -> int:
     rows_by_threshold: dict[float, list[dict[str, object]]] = {
         threshold: [] for threshold in thresholds
     }
-    processed_count = 0
-    for image_path, prediction in zip(image_paths, predictions):
+    for image_path, prediction in zip(image_paths, predictions, strict=True):
         image = cv2.imread(str(image_path))
         if image is None:
             raise RuntimeError(f"Could not read image: {image_path}")
@@ -350,7 +325,6 @@ def main() -> int:
                 "assigned_dot_count": assigned_count,
                 "outlier_count": len(result.outlier_indices),
                 "valid": result.valid,
-                "structurally_valid": result.valid,
                 "corner_mean_error_px": mean_error if mean_error is not None else "",
                 "corner_max_error_px": max_error if max_error is not None else "",
                 "corner_mean_error_diagonal_fraction": (
@@ -363,19 +337,13 @@ def main() -> int:
             }
             per_image_rows.append(row)
             rows_by_threshold[threshold].append(row)
-        processed_count += 1
-
-    if processed_count != len(image_paths):
-        raise RuntimeError(
-            f"Expected {len(image_paths)} predictions, got {processed_count}"
-        )
 
     for threshold, rows in rows_by_threshold.items():
         output_dir = threshold_directories[threshold]
         write_csv(output_dir / "per_image.csv", rows)
-        create_contact_sheet(output_dir, rows, output_dir / "contact_sheet.jpg")
+        rail_contact_sheet(output_dir, rows, output_dir / "contact_sheet.jpg")
 
-    summary_rows = summarize(thresholds, per_image_rows)
+    summary_rows = summarize(rows_by_threshold)
     write_csv(args.output / "per_image_all_thresholds.csv", per_image_rows)
     write_csv(args.output / "confidence_summary.csv", summary_rows)
     plot_summary(summary_rows, args.output / "confidence_sweep.png")

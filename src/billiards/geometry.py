@@ -7,11 +7,12 @@ or a future manual/debugging tool.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from itertools import permutations
 import math
 from typing import Sequence
 
+import cv2
 import numpy as np
 
 
@@ -21,9 +22,6 @@ class PointObservation:
     y: float
     confidence: float = 1.0
     source_index: int = -1
-
-    def as_xy(self) -> tuple[float, float]:
-        return (self.x, self.y)
 
 
 @dataclass(frozen=True)
@@ -38,8 +36,8 @@ class RailLine:
     max_residual_px: float
     support_span_px: float
 
-    def distance(self, point: PointObservation | tuple[float, float]) -> float:
-        x, y = point.as_xy() if isinstance(point, PointObservation) else point
+    def distance(self, point: tuple[float, float]) -> float:
+        x, y = point
         return abs(self.a * x + self.b * y + self.c)
 
     def direction(self) -> tuple[float, float]:
@@ -77,28 +75,20 @@ class RailFitConfig:
 class RailFitResult:
     valid: bool
     points: tuple[PointObservation, ...]
-    rails: tuple[RailLine, ...]
-    corners: tuple[tuple[float, float], ...]
-    outlier_indices: tuple[int, ...]
-    quadrilateral_area_px: float | None
-    quadrilateral_area_fraction: float | None
     distance_threshold_px: float
     warnings: tuple[str, ...]
+    rails: tuple[RailLine, ...] = ()
+    corners: tuple[tuple[float, float], ...] = ()
+    outlier_indices: tuple[int, ...] = ()
+    quadrilateral_area_px: float | None = None
+    quadrilateral_area_fraction: float | None = None
 
     def as_dict(self) -> dict[str, object]:
         return {
             "method": "automatic_dots",
             "valid": self.valid,
             "input_dot_count": len(self.points),
-            "points": [
-                {
-                    "x": point.x,
-                    "y": point.y,
-                    "confidence": point.confidence,
-                    "source_index": point.source_index,
-                }
-                for point in self.points
-            ],
+            "points": [asdict(point) for point in self.points],
             "rail_lines": [rail.as_dict() for rail in self.rails],
             "corners_image_xy": [list(corner) for corner in self.corners],
             "dot_inliers": [
@@ -132,20 +122,13 @@ def _refine_line(
     if len(indices) < 2:
         return None
     coordinates = np.asarray(
-        [[points[index].x, points[index].y] for index in indices], dtype=float
+        [[points[index].x, points[index].y] for index in indices], dtype=np.float32
     )
-    centroid = coordinates.mean(axis=0)
-    centered = coordinates - centroid
-    covariance = centered.T @ centered
-    eigenvalues, eigenvectors = np.linalg.eigh(covariance)
-    direction = eigenvectors[:, int(np.argmax(eigenvalues))]
-    direction_norm = float(np.linalg.norm(direction))
-    if direction_norm <= 1e-12:
-        return None
-    direction /= direction_norm
-    a = -float(direction[1])
-    b = float(direction[0])
-    c = -(a * float(centroid[0]) + b * float(centroid[1]))
+    direction_x, direction_y, x0, y0 = map(
+        float, cv2.fitLine(coordinates, cv2.DIST_L2, 0, 0.01, 0.01).ravel()
+    )
+    a, b = -direction_y, direction_x
+    c = -(a * x0 + b * y0)
     if a < 0 or (abs(a) <= 1e-12 and b < 0):
         a, b, c = -a, -b, -c
     return (a, b, c)
@@ -315,23 +298,6 @@ def _signed_polygon_area(points: Sequence[tuple[float, float]]) -> float:
     )
 
 
-def _is_convex(points: Sequence[tuple[float, float]]) -> bool:
-    if len(points) != 4:
-        return False
-    cross_products: list[float] = []
-    for index in range(4):
-        first = points[index]
-        second = points[(index + 1) % 4]
-        third = points[(index + 2) % 4]
-        cross_products.append(
-            (second[0] - first[0]) * (third[1] - second[1])
-            - (second[1] - first[1]) * (third[0] - second[0])
-        )
-    return all(value > 1e-6 for value in cross_products) or all(
-        value < -1e-6 for value in cross_products
-    )
-
-
 def _rails_in_corner_order(
     rails: Sequence[RailLine], corners: Sequence[tuple[float, float]]
 ) -> tuple[RailLine, ...]:
@@ -373,19 +339,12 @@ def fit_rails(
     warnings: list[str] = []
 
     if len(observations) < config.min_total_points:
-        warnings.append(
-            f"insufficient_dot_points:{len(observations)}<{config.min_total_points}"
-        )
         return RailFitResult(
-            valid=False,
-            points=observations,
-            rails=(),
-            corners=(),
+            False,
+            observations,
+            distance_threshold,
+            (f"insufficient_dot_points:{len(observations)}<{config.min_total_points}",),
             outlier_indices=tuple(range(len(observations))),
-            quadrilateral_area_px=None,
-            quadrilateral_area_fraction=None,
-            distance_threshold_px=distance_threshold,
-            warnings=tuple(warnings),
         )
 
     remaining = list(range(len(observations)))
@@ -404,17 +363,13 @@ def fit_rails(
         remaining = [index for index in remaining if index not in inlier_set]
 
     if len(rails) != 4:
-        warnings.append(f"four_rails_not_found:{len(rails)}/4")
         return RailFitResult(
-            valid=False,
-            points=observations,
+            False,
+            observations,
+            distance_threshold,
+            (f"four_rails_not_found:{len(rails)}/4",),
             rails=tuple(rails),
-            corners=(),
             outlier_indices=tuple(sorted(remaining)),
-            quadrilateral_area_px=None,
-            quadrilateral_area_fraction=None,
-            distance_threshold_px=distance_threshold,
-            warnings=tuple(warnings),
         )
 
     pairing = _opposite_pairing(rails)
@@ -423,17 +378,13 @@ def fit_rails(
         for second_index in pairing[1]:
             corner = _intersection(rails[first_index], rails[second_index])
             if corner is None:
-                warnings.append("parallel_adjacent_rails")
                 return RailFitResult(
-                    valid=False,
-                    points=observations,
+                    False,
+                    observations,
+                    distance_threshold,
+                    ("parallel_adjacent_rails",),
                     rails=tuple(rails),
-                    corners=(),
                     outlier_indices=tuple(sorted(remaining)),
-                    quadrilateral_area_px=None,
-                    quadrilateral_area_fraction=None,
-                    distance_threshold_px=distance_threshold,
-                    warnings=tuple(warnings),
                 )
             raw_corners.append(corner)
 
@@ -442,7 +393,7 @@ def fit_rails(
     area = abs(_signed_polygon_area(corners))
     area_fraction = area / (width * height)
 
-    if not _is_convex(corners):
+    if not cv2.isContourConvex(np.asarray(corners, dtype=np.float32)):
         warnings.append("non_convex_quadrilateral")
     if area_fraction < config.min_quad_area_fraction:
         warnings.append(

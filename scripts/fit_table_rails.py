@@ -12,7 +12,7 @@ Examples:
 from __future__ import annotations
 
 import argparse
-import csv
+from dataclasses import fields
 import json
 from pathlib import Path
 import sys
@@ -28,6 +28,14 @@ SRC_ROOT = PROJECT_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
+from analyze_detector_errors import (  # noqa: E402
+    IMAGE_SUFFIXES,
+    create_contact_sheet,
+    draw_banner,
+    load_ground_truth,
+    result_to_predictions,
+    write_csv,
+)
 from billiards.geometry import (  # noqa: E402
     PointObservation,
     RailFitConfig,
@@ -37,7 +45,6 @@ from billiards.geometry import (  # noqa: E402
 )
 
 
-IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
 RAIL_COLORS = (
     (70, 210, 255),
     (80, 210, 80),
@@ -62,7 +69,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--weights",
         type=Path,
-        default=Path("outputs/detection/baseline-yolo11n-640/weights/best.pt"),
+        default=Path("outputs/detection/baseline-yolo11n-960/weights/best.pt"),
     )
     parser.add_argument(
         "--config", type=Path, default=Path("configs/geometry.yaml")
@@ -97,17 +104,7 @@ def load_settings(path: Path) -> dict[str, object]:
 
 
 def rail_config(settings: dict[str, object]) -> RailFitConfig:
-    return RailFitConfig(
-        distance_threshold_ratio=float(settings["rail_distance_threshold_ratio"]),
-        min_inliers_per_rail=int(settings["min_inliers_per_rail"]),
-        min_total_points=int(settings["min_total_points"]),
-        min_quad_area_fraction=float(settings["min_quad_area_fraction"]),
-        max_quad_area_fraction=float(settings["max_quad_area_fraction"]),
-        corner_margin_ratio=float(settings["corner_margin_ratio"]),
-        min_adjacent_angle_degrees=float(
-            settings["min_adjacent_angle_degrees"]
-        ),
-    )
+    return RailFitConfig(**{field.name: settings[field.name] for field in fields(RailFitConfig)})
 
 
 def find_images(source: Path) -> list[Path]:
@@ -128,123 +125,45 @@ def find_images(source: Path) -> list[Path]:
     return images
 
 
-def label_path_for(image_path: Path, labels_dir: Path | None) -> Path:
-    if labels_dir is not None:
-        return labels_dir.resolve() / f"{image_path.stem}.txt"
-    if image_path.parent.name != "images":
-        raise ValueError(
-            "Label mode expects an images directory or an explicit --labels-dir"
-        )
-    return image_path.parent.parent / "labels" / f"{image_path.stem}.txt"
-
-
 def load_labelled_dots(
     image_path: Path,
     image_size: tuple[int, int],
     labels_dir: Path | None,
     dot_class_id: int,
 ) -> list[PointObservation]:
-    label_path = label_path_for(image_path, labels_dir)
-    if not label_path.exists():
-        raise FileNotFoundError(f"Missing label: {label_path}")
-    width, height = image_size
-    points: list[PointObservation] = []
-    for source_index, raw_line in enumerate(
-        label_path.read_text(encoding="utf-8").splitlines()
-    ):
-        if not raw_line.strip():
-            continue
-        fields = raw_line.split()
-        if len(fields) != 5:
-            raise ValueError(f"Invalid YOLO label row in {label_path}")
-        class_id = int(fields[0])
-        if class_id != dot_class_id:
-            continue
-        center_x, center_y = map(float, fields[1:3])
-        points.append(
-            PointObservation(
-                x=center_x * width,
-                y=center_y * height,
-                confidence=1.0,
-                source_index=source_index,
-            )
-        )
-    return points
+    return [
+        PointObservation(*item.center, 1.0, index)
+        for index, item in enumerate(load_ground_truth(image_path, *image_size, labels_dir))
+        if item.class_id == dot_class_id
+    ]
 
 
 def yolo_dot_class_id(model: object) -> int:
-    names = getattr(model, "names")
-    if isinstance(names, dict):
-        matches = [index for index, name in names.items() if str(name) == "Dot"]
-    else:
-        matches = [index for index, name in enumerate(names) if str(name) == "Dot"]
+    matches = [index for index, name in model.names.items() if name == "Dot"]
     if len(matches) != 1:
         raise ValueError(f"Expected exactly one Dot class, found {matches}")
     return int(matches[0])
 
 
 def prediction_points(result: object, dot_class_id: int) -> list[PointObservation]:
-    boxes = getattr(result, "boxes")
-    if boxes is None or len(boxes) == 0:
-        return []
-    xyxy = boxes.xyxy.detach().cpu().numpy()
-    classes = boxes.cls.detach().cpu().numpy().astype(int)
-    confidences = boxes.conf.detach().cpu().numpy()
-    points: list[PointObservation] = []
-    for source_index, (box, class_id, confidence) in enumerate(
-        zip(xyxy, classes, confidences)
-    ):
-        if int(class_id) != dot_class_id:
-            continue
-        x1, y1, x2, y2 = map(float, box)
-        points.append(
-            PointObservation(
-                x=(x1 + x2) / 2.0,
-                y=(y1 + y2) / 2.0,
-                confidence=float(confidence),
-                source_index=source_index,
-            )
-        )
-    return points
+    return [
+        PointObservation(*item.center, item.confidence, index)
+        for index, item in enumerate(result_to_predictions(result))
+        if item.class_id == dot_class_id
+    ]
 
 
 def line_image_segment(
     line: RailLine, width: int, height: int
 ) -> tuple[tuple[int, int], tuple[int, int]] | None:
-    candidates: list[tuple[float, float]] = []
-    if abs(line.b) > 1e-12:
-        for x in (0.0, float(width - 1)):
-            y = -(line.a * x + line.c) / line.b
-            if 0.0 <= y <= height - 1:
-                candidates.append((x, y))
-    if abs(line.a) > 1e-12:
-        for y in (0.0, float(height - 1)):
-            x = -(line.b * y + line.c) / line.a
-            if 0.0 <= x <= width - 1:
-                candidates.append((x, y))
-    unique: list[tuple[float, float]] = []
-    for candidate in candidates:
-        if not any(
-            np.linalg.norm(np.asarray(candidate) - np.asarray(existing)) < 1e-6
-            for existing in unique
-        ):
-            unique.append(candidate)
-    if len(unique) < 2:
-        return None
-    pair = max(
-        (
-            (left, right)
-            for left_index, left in enumerate(unique)
-            for right in unique[left_index + 1 :]
-        ),
-        key=lambda value: np.linalg.norm(
-            np.asarray(value[0]) - np.asarray(value[1])
-        ),
+    # (-a*c, -b*c) is the line's closest point to the origin; extend it past the image.
+    x, y, far = -line.a * line.c, -line.b * line.c, 4 * (width + height)
+    inside, start, end = cv2.clipLine(
+        (0, 0, width, height),
+        (round(x + far * line.b), round(y - far * line.a)),
+        (round(x - far * line.b), round(y + far * line.a)),
     )
-    return (
-        tuple(int(round(value)) for value in pair[0]),
-        tuple(int(round(value)) for value in pair[1]),
-    )
+    return (start, end) if inside else None
 
 
 def render_result(image: np.ndarray, result: RailFitResult, mode: str) -> np.ndarray:
@@ -313,105 +232,27 @@ def render_result(image: np.ndarray, result: RailFitResult, mode: str) -> np.nda
             )
 
     supports = ",".join(str(len(rail.inlier_indices)) for rail in result.rails)
-    summary = (
-        f"rail fit | mode={mode} valid={result.valid} dots={len(result.points)} "
-        f"rails={len(result.rails)} support=[{supports}] "
-        f"threshold={result.distance_threshold_px:.1f}px"
-    )
-    warning_text = "; ".join(result.warnings) if result.warnings else "warnings=none"
-    scale = max(0.55, min(width, height) / 1100)
-    text_thickness = max(1, round(min(width, height) / 600))
-    text_height = cv2.getTextSize(
-        summary, cv2.FONT_HERSHEY_SIMPLEX, scale, text_thickness
-    )[0][1]
-    overlay = annotated.copy()
-    cv2.rectangle(
-        overlay,
-        (0, 0),
-        (width - 1, text_height * 3 + 20),
-        (20, 20, 20),
-        -1,
-    )
-    cv2.addWeighted(overlay, 0.80, annotated, 0.20, 0, annotated)
-    cv2.putText(
+    draw_banner(
         annotated,
-        summary,
-        (8, text_height + 6),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        scale,
-        (255, 255, 255),
-        text_thickness,
-        cv2.LINE_AA,
-    )
-    cv2.putText(
-        annotated,
-        warning_text[:180],
-        (8, text_height * 2 + 14),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        scale,
-        (255, 255, 255),
-        text_thickness,
-        cv2.LINE_AA,
+        [
+            f"rail fit | mode={mode} valid={result.valid} dots={len(result.points)} "
+            f"rails={len(result.rails)} support=[{supports}] "
+            f"threshold={result.distance_threshold_px:.1f}px",
+            ("; ".join(result.warnings) or "warnings=none")[:180],
+        ],
     )
     return annotated
 
 
-def write_csv(path: Path, rows: Sequence[dict[str, object]]) -> None:
-    if not rows:
-        return
-    with path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=list(rows[0].keys()))
-        writer.writeheader()
-        writer.writerows(rows)
-
-
-def create_contact_sheet(
-    output_dir: Path,
-    rows: Sequence[dict[str, object]],
-    output_path: Path,
+def rail_contact_sheet(
+    output_dir: Path, rows: Sequence[dict[str, object]], output_path: Path
 ) -> None:
-    ordered_rows = sorted(
+    """Contact sheet of up to 24 overlays, failed and weakly supported fits first."""
+    ordered = sorted(
         rows,
-        key=lambda row: (
-            bool(row["valid"]),
-            int(row["rail_count"]),
-            int(row["assigned_dot_count"]),
-        ),
+        key=lambda row: (bool(row["valid"]), int(row["rail_count"]), int(row["assigned_dot_count"])),
     )
-    tile_width, tile_height = 480, 300
-    tiles: list[np.ndarray] = []
-    for row in ordered_rows[:24]:
-        source = cv2.imread(str(output_dir / str(row["overlay"])))
-        if source is None:
-            continue
-        scale = min(tile_width / source.shape[1], tile_height / source.shape[0])
-        resized = cv2.resize(
-            source,
-            (
-                max(1, round(source.shape[1] * scale)),
-                max(1, round(source.shape[0] * scale)),
-            ),
-            interpolation=cv2.INTER_AREA,
-        )
-        tile = np.full((tile_height, tile_width, 3), 25, dtype=np.uint8)
-        x_offset = (tile_width - resized.shape[1]) // 2
-        y_offset = (tile_height - resized.shape[0]) // 2
-        tile[
-            y_offset : y_offset + resized.shape[0],
-            x_offset : x_offset + resized.shape[1],
-        ] = resized
-        tiles.append(tile)
-    if not tiles:
-        return
-    columns = 3
-    blank = np.full_like(tiles[0], 25)
-    while len(tiles) % columns:
-        tiles.append(blank.copy())
-    contact_rows = [
-        np.hstack(tiles[index : index + columns])
-        for index in range(0, len(tiles), columns)
-    ]
-    cv2.imwrite(str(output_path), np.vstack(contact_rows))
+    create_contact_sheet([output_dir / str(row["overlay"]) for row in ordered[:24]], output_path)
 
 
 def markdown_report(
@@ -435,7 +276,7 @@ def markdown_report(
         "",
         "## Settings",
         "",
-        f"- Rail distance threshold ratio: `{settings['rail_distance_threshold_ratio']}`",
+        f"- Rail distance threshold ratio: `{settings['distance_threshold_ratio']}`",
         f"- Minimum inliers per rail: `{settings['min_inliers_per_rail']}`",
         f"- Minimum total dots: `{settings['min_total_points']}`",
     ]
@@ -560,8 +401,7 @@ def main() -> int:
             verbose=False,
             stream=True,
         )
-        processed_count = 0
-        for image_path, prediction in zip(image_paths, predictions):
+        for image_path, prediction in zip(image_paths, predictions, strict=True):
             image = cv2.imread(str(image_path))
             if image is None:
                 raise RuntimeError(f"Could not read image: {image_path}")
@@ -570,14 +410,9 @@ def main() -> int:
                 image,
                 prediction_points(prediction, dot_class_id),
             )
-            processed_count += 1
-        if processed_count != len(image_paths):
-            raise RuntimeError(
-                f"Expected {len(image_paths)} predictions, got {processed_count}"
-            )
 
     write_csv(args.output / "summary.csv", rows)
-    create_contact_sheet(args.output, rows, args.output / "contact_sheet.jpg")
+    rail_contact_sheet(args.output, rows, args.output / "contact_sheet.jpg")
     report_path = args.output / "RAIL_FITTING_REPORT.md"
     report_path.write_text(
         markdown_report(args, settings, rows), encoding="utf-8"

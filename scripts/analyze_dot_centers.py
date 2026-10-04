@@ -3,14 +3,13 @@
 YOLO reports boxes, but the table-geometry stage consumes dot centres. This
 diagnostic therefore performs one-to-one matching between predicted and labelled
 Dot centres at several pixel tolerances. Distances are expressed at the configured
-inference scale (640 px by default), while overlays remain in original-image
+inference scale (960 px by default), while overlays remain in original-image
 coordinates.
 """
 
 from __future__ import annotations
 
 import argparse
-import csv
 import json
 import math
 from dataclasses import dataclass
@@ -20,24 +19,18 @@ from typing import Sequence
 
 import cv2
 import numpy as np
-from ultralytics import YOLO
 
-try:
-    from scripts.analyze_detector_errors import (
-        Detection,
-        load_dataset,
-        load_ground_truth,
-        result_to_predictions,
-        safe_ratio,
-    )
-except ModuleNotFoundError:  # Direct execution: python scripts/analyze_dot_centers.py
-    from analyze_detector_errors import (  # type: ignore[no-redef]
-        Detection,
-        load_dataset,
-        load_ground_truth,
-        result_to_predictions,
-        safe_ratio,
-    )
+from analyze_detector_errors import (
+    Detection,
+    create_contact_sheet,
+    draw_banner,
+    load_dataset,
+    load_ground_truth,
+    prf,
+    result_to_predictions,
+    safe_ratio,
+    write_csv,
+)
 
 
 MATCH_COLOR = (60, 190, 60)
@@ -60,7 +53,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--weights",
         type=Path,
-        default=Path("outputs/detection/baseline-yolo11n-640/weights/best.pt"),
+        default=Path("outputs/detection/baseline-yolo11n-960/weights/best.pt"),
     )
     parser.add_argument(
         "--data",
@@ -71,9 +64,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path("outputs/detection/baseline-yolo11n-640-dot-centers"),
+        default=Path("outputs/detection/baseline-yolo11n-960-dot-centers"),
     )
-    parser.add_argument("--imgsz", type=int, default=640)
+    parser.add_argument("--imgsz", type=int, default=960)
     parser.add_argument("--device", default="0")
     parser.add_argument("--batch", type=int, default=2)
     parser.add_argument("--prediction-iou", type=float, default=0.70)
@@ -106,11 +99,6 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def center(detection: Detection) -> tuple[float, float]:
-    x1, y1, x2, y2 = detection.box_xyxy
-    return ((x1 + x2) / 2.0, (y1 + y2) / 2.0)
-
-
 def inference_gain(width: int, height: int, image_size: int) -> float:
     """Return the isotropic letterbox resize gain into model coordinates."""
     if width <= 0 or height <= 0 or image_size <= 0:
@@ -121,9 +109,7 @@ def inference_gain(width: int, height: int, image_size: int) -> float:
 def center_distance_model_px(
     left: Detection, right: Detection, gain: float
 ) -> float:
-    left_x, left_y = center(left)
-    right_x, right_y = center(right)
-    return math.hypot(left_x - right_x, left_y - right_y) * gain
+    return math.dist(left.center, right.center) * gain
 
 
 def match_centers(
@@ -187,22 +173,6 @@ def match_centers(
     )
 
 
-def percentile(values: Sequence[float], quantile: float) -> float | None:
-    if not values:
-        return None
-    return float(np.percentile(np.asarray(values, dtype=float), quantile))
-
-
-def optional_stat(values: Sequence[float], operation: str) -> float | None:
-    if not values:
-        return None
-    if operation == "mean":
-        return mean(values)
-    if operation == "median":
-        return median(values)
-    raise ValueError(f"Unknown operation: {operation}")
-
-
 def evaluate_setting(
     ground_truth_by_image: Sequence[Sequence[Detection]],
     predictions_by_image: Sequence[Sequence[Detection]],
@@ -236,32 +206,19 @@ def evaluate_setting(
 
     false_positives = total_predictions - total_matches
     false_negatives = total_gt - total_matches
-    precision = safe_ratio(total_matches, total_matches + false_positives)
-    recall = safe_ratio(total_matches, total_matches + false_negatives)
     return {
         "confidence": confidence,
         "tolerance_model_px": tolerance_model_px,
         "tp": total_matches,
         "fp": false_positives,
         "fn": false_negatives,
-        "precision": precision,
-        "recall": recall,
-        "f1": safe_ratio(2 * precision * recall, precision + recall),
-        "mean_error_model_px": optional_stat(distances, "mean"),
-        "median_error_model_px": optional_stat(distances, "median"),
-        "p95_error_model_px": percentile(distances, 95),
+        **prf(total_matches, false_positives, false_negatives),
+        "mean_error_model_px": mean(distances) if distances else None,
+        "median_error_model_px": median(distances) if distances else None,
+        "p95_error_model_px": float(np.percentile(distances, 95)) if distances else None,
         "fully_matched_images": fully_matched_images,
         "image_count": len(ground_truth_by_image),
     }
-
-
-def write_csv(path: Path, rows: Sequence[dict[str, object]]) -> None:
-    if not rows:
-        return
-    with path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=list(rows[0].keys()))
-        writer.writeheader()
-        writer.writerows(rows)
 
 
 def draw_marker(
@@ -295,8 +252,8 @@ def annotate_centers(
     matched_predictions = {match.prediction_index for match in matches}
 
     for match in matches:
-        gt_center = center(ground_truth[match.ground_truth_index])
-        prediction_center = center(predictions[match.prediction_index])
+        gt_center = ground_truth[match.ground_truth_index].center
+        prediction_center = predictions[match.prediction_index].center
         cv2.line(
             annotated,
             tuple(int(round(value)) for value in gt_center),
@@ -310,105 +267,27 @@ def annotate_centers(
 
     for gt_index, detection in enumerate(ground_truth):
         if gt_index not in matched_gt:
-            draw_marker(annotated, center(detection), MISSED_COLOR, cv2.MARKER_DIAMOND)
+            draw_marker(annotated, detection.center, MISSED_COLOR, cv2.MARKER_DIAMOND)
 
     for prediction_index, detection in enumerate(predictions):
         if prediction_index not in matched_predictions:
             draw_marker(
                 annotated,
-                center(detection),
+                detection.center,
                 FALSE_POSITIVE_COLOR,
                 cv2.MARKER_TRIANGLE_UP,
             )
 
-    summary = (
-        f"Dot centres | conf={confidence:.2f} tolerance={tolerance_model_px:g}px@640 "
-        f"| match={len(matches)} miss={len(ground_truth) - len(matches)} "
-        f"fp={len(predictions) - len(matches)}"
-    )
-    legend = "blue=GT green=matched red=miss orange=FP"
-    scale = max(0.55, min(image.shape[:2]) / 1050)
-    thickness = max(1, round(min(image.shape[:2]) / 550))
-    text_height = cv2.getTextSize(
-        summary, cv2.FONT_HERSHEY_SIMPLEX, scale, thickness
-    )[0][1]
-    overlay = annotated.copy()
-    cv2.rectangle(
-        overlay,
-        (0, 0),
-        (annotated.shape[1] - 1, text_height * 3 + 18),
-        (20, 20, 20),
-        -1,
-    )
-    cv2.addWeighted(overlay, 0.80, annotated, 0.20, 0, annotated)
-    cv2.putText(
+    draw_banner(
         annotated,
-        summary,
-        (8, text_height + 5),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        scale,
-        (255, 255, 255),
-        thickness,
-        cv2.LINE_AA,
-    )
-    cv2.putText(
-        annotated,
-        legend,
-        (8, text_height * 2 + 12),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        scale,
-        (255, 255, 255),
-        thickness,
-        cv2.LINE_AA,
+        [
+            f"Dot centres | conf={confidence:.2f} tolerance={tolerance_model_px:g}px@model "
+            f"| match={len(matches)} miss={len(ground_truth) - len(matches)} "
+            f"fp={len(predictions) - len(matches)}",
+            "blue=GT green=matched red=miss orange=FP",
+        ],
     )
     return annotated
-
-
-def create_contact_sheet(
-    gallery_dir: Path,
-    per_image_rows: Sequence[dict[str, object]],
-    output_path: Path,
-) -> None:
-    worst_rows = sorted(
-        per_image_rows,
-        key=lambda row: (int(row["missed"]), int(row["false_positive"])),
-        reverse=True,
-    )[:12]
-    tile_width, tile_height = 480, 300
-    tiles: list[np.ndarray] = []
-    for row in worst_rows:
-        source = cv2.imread(str(gallery_dir / str(row["gallery_file"])))
-        if source is None:
-            continue
-        scale = min(tile_width / source.shape[1], tile_height / source.shape[0])
-        resized = cv2.resize(
-            source,
-            (
-                max(1, round(source.shape[1] * scale)),
-                max(1, round(source.shape[0] * scale)),
-            ),
-            interpolation=cv2.INTER_AREA,
-        )
-        tile = np.full((tile_height, tile_width, 3), 28, dtype=np.uint8)
-        y_offset = (tile_height - resized.shape[0]) // 2
-        x_offset = (tile_width - resized.shape[1]) // 2
-        tile[
-            y_offset : y_offset + resized.shape[0],
-            x_offset : x_offset + resized.shape[1],
-        ] = resized
-        tiles.append(tile)
-
-    if not tiles:
-        return
-    columns = 3
-    blank = np.full_like(tiles[0], 28)
-    while len(tiles) % columns:
-        tiles.append(blank.copy())
-    rows = [
-        np.hstack(tiles[index : index + columns])
-        for index in range(0, len(tiles), columns)
-    ]
-    cv2.imwrite(str(output_path), np.vstack(rows))
 
 
 def markdown_report(
@@ -500,6 +379,8 @@ def validate_args(args: argparse.Namespace) -> None:
 
 
 def main() -> int:
+    from ultralytics import YOLO
+
     args = parse_args()
     validate_args(args)
     args.output.mkdir(parents=True, exist_ok=True)
@@ -610,15 +491,15 @@ def main() -> int:
                 "missed": len(ground_truth) - len(matches),
                 "false_positive": len(predictions) - len(matches),
                 "recall": safe_ratio(len(matches), len(ground_truth)),
-                "mean_error_model_px": optional_stat(distances, "mean"),
-                "p95_error_model_px": percentile(distances, 95),
+                "mean_error_model_px": mean(distances) if distances else None,
+                "p95_error_model_px": float(np.percentile(distances, 95)) if distances else None,
                 "complete": len(matches) == len(ground_truth),
             }
         )
         for match in matches:
-            gt_x, gt_y = center(ground_truth[match.ground_truth_index])
+            gt_x, gt_y = ground_truth[match.ground_truth_index].center
             prediction = predictions[match.prediction_index]
-            prediction_x, prediction_y = center(prediction)
+            prediction_x, prediction_y = prediction.center
             matched_pair_rows.append(
                 {
                     "image": image_path.name,
@@ -636,8 +517,14 @@ def main() -> int:
     write_csv(args.output / "fixed_confidence.csv", fixed_rows)
     write_csv(args.output / "per_image.csv", per_image_rows)
     write_csv(args.output / "matched_pairs.csv", matched_pair_rows)
+    worst_rows = sorted(
+        per_image_rows,
+        key=lambda row: (int(row["missed"]), int(row["false_positive"])),
+        reverse=True,
+    )[:12]
     create_contact_sheet(
-        gallery_dir, per_image_rows, args.output / "worst_cases.jpg"
+        [gallery_dir / str(row["gallery_file"]) for row in worst_rows],
+        args.output / "worst_cases.jpg",
     )
 
     ground_truth_count = sum(len(items) for items in ground_truth_by_image)

@@ -1,7 +1,7 @@
 # Initial rail-fitting settings for clear, fully visible 1920x1080 images.
 # Thresholds are ratios where possible so real images may have other resolutions.
 
-rail_distance_threshold_ratio: 0.004
+distance_threshold_ratio: 0.004
 min_inliers_per_rail: 3
 min_total_points: 12
 min_quad_area_fraction: 0.03
@@ -11,7 +11,8 @@ min_adjacent_angle_degrees: 12.0
 
 # Dot-candidate operating point selected by downstream rail fitting on validation.
 # This deliberately favors recall; RANSAC rejects non-collinear candidates. It is
-# not a ball-class threshold and remains provisional until homography evaluation.
+# not a ball-class threshold. 0.05 was selected with the 640 px model; re-run
+# scripts/sweep_rail_confidence.py before treating it as the 960 px operating point.
 prediction_confidence: 0.05
 prediction_nms_iou: 0.70
-imgsz: 640
+imgsz: 960

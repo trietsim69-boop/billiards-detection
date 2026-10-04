@@ -11,14 +11,13 @@ from __future__ import annotations
 import argparse
 import csv
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Sequence
 
 import cv2
 import numpy as np
 import yaml
-from ultralytics import YOLO
 
 
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
@@ -36,6 +35,11 @@ class Detection:
     box_xyxy: tuple[float, float, float, float]
     confidence: float = 1.0
 
+    @property
+    def center(self) -> tuple[float, float]:
+        x1, y1, x2, y2 = self.box_xyxy
+        return ((x1 + x2) / 2.0, (y1 + y2) / 2.0)
+
 
 @dataclass(frozen=True)
 class MatchResult:
@@ -52,7 +56,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--weights",
         type=Path,
-        default=Path("outputs/detection/baseline-yolo11n-640/weights/best.pt"),
+        default=Path("outputs/detection/baseline-yolo11n-960/weights/best.pt"),
     )
     parser.add_argument(
         "--data",
@@ -63,9 +67,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path("outputs/detection/baseline-yolo11n-640-error-analysis"),
+        default=Path("outputs/detection/baseline-yolo11n-960-error-analysis"),
     )
-    parser.add_argument("--imgsz", type=int, default=640)
+    parser.add_argument("--imgsz", type=int, default=960)
     parser.add_argument("--device", default="0")
     parser.add_argument("--batch", type=int, default=2)
     parser.add_argument("--iou", type=float, default=0.50)
@@ -105,14 +109,20 @@ def load_dataset(
     return image_paths, class_names, image_dir
 
 
-def label_path_for(image_path: Path) -> Path:
+def label_path_for(image_path: Path, labels_dir: Path | None = None) -> Path:
+    if labels_dir is not None:
+        return labels_dir.resolve() / f"{image_path.stem}.txt"
     if image_path.parent.name != "images":
-        raise ValueError(f"Expected an images directory, got {image_path.parent}")
+        raise ValueError(
+            f"Expected an images directory or an explicit labels directory, got {image_path.parent}"
+        )
     return image_path.parent.parent / "labels" / f"{image_path.stem}.txt"
 
 
-def load_ground_truth(image_path: Path, width: int, height: int) -> list[Detection]:
-    label_path = label_path_for(image_path)
+def load_ground_truth(
+    image_path: Path, width: int, height: int, labels_dir: Path | None = None
+) -> list[Detection]:
+    label_path = label_path_for(image_path, labels_dir)
     if not label_path.exists():
         raise FileNotFoundError(f"Missing label for {image_path.name}: {label_path}")
 
@@ -242,6 +252,16 @@ def safe_ratio(numerator: int, denominator: int) -> float:
     return numerator / denominator if denominator else 0.0
 
 
+def prf(tp: int, fp: int, fn: int) -> dict[str, float]:
+    precision = safe_ratio(tp, tp + fp)
+    recall = safe_ratio(tp, tp + fn)
+    return {
+        "precision": precision,
+        "recall": recall,
+        "f1": safe_ratio(2 * precision * recall, precision + recall),
+    }
+
+
 def metrics_for_threshold(
     ground_truth_by_image: Sequence[Sequence[Detection]],
     predictions_by_image: Sequence[Sequence[Detection]],
@@ -272,49 +292,19 @@ def metrics_for_threshold(
         for gt_index in matches.missed:
             counts[ground_truth[gt_index].class_id]["fn"] += 1
 
-    rows: list[dict[str, object]] = []
-    for class_id, class_name in enumerate(class_names):
-        tp = counts[class_id]["tp"]
-        fp = counts[class_id]["fp"]
-        fn = counts[class_id]["fn"]
-        precision = safe_ratio(tp, tp + fp)
-        recall = safe_ratio(tp, tp + fn)
-        f1 = safe_ratio(2 * precision * recall, precision + recall)
-        rows.append(
-            {
-                "threshold": threshold,
-                "class_id": class_id,
-                "class_name": class_name,
-                "tp": tp,
-                "fp": fp,
-                "fn": fn,
-                "precision": precision,
-                "recall": recall,
-                "f1": f1,
-            }
-        )
-    total_tp = sum(value["tp"] for value in counts.values())
-    total_fp = sum(value["fp"] for value in counts.values())
-    total_fn = sum(value["fn"] for value in counts.values())
-    total_precision = safe_ratio(total_tp, total_tp + total_fp)
-    total_recall = safe_ratio(total_tp, total_tp + total_fn)
-    rows.append(
+    counts[-1] = {
+        key: sum(value[key] for value in counts.values()) for key in ("tp", "fp", "fn")
+    }
+    return [
         {
             "threshold": threshold,
-            "class_id": -1,
-            "class_name": "all",
-            "tp": total_tp,
-            "fp": total_fp,
-            "fn": total_fn,
-            "precision": total_precision,
-            "recall": total_recall,
-            "f1": safe_ratio(
-                2 * total_precision * total_recall,
-                total_precision + total_recall,
-            ),
+            "class_id": class_id,
+            "class_name": class_names[class_id] if class_id >= 0 else "all",
+            **value,
+            **prf(value["tp"], value["fp"], value["fn"]),
         }
-    )
-    return rows
+        for class_id, value in counts.items()
+    ]
 
 
 def select_dot_threshold(
@@ -474,35 +464,31 @@ def annotate_image(
         + len(matches.false_positive)
         + len(matches.missed)
     )
-    summary = (
-        f"conf={threshold:.2f} IoU={iou_threshold:.2f} | correct={correct_count} "
-        f"errors={error_count} | green=TP red=miss orange=FP purple=wrong"
-    )
-    scale = max(0.50, min(image.shape[:2]) / 1100)
-    thickness = max(1, round(min(image.shape[:2]) / 550))
-    (text_width, text_height), baseline = cv2.getTextSize(
-        summary, cv2.FONT_HERSHEY_SIMPLEX, scale, thickness
-    )
-    overlay = annotated.copy()
-    cv2.rectangle(
-        overlay,
-        (0, 0),
-        (min(annotated.shape[1] - 1, text_width + 12), text_height + baseline + 12),
-        (20, 20, 20),
-        -1,
-    )
-    cv2.addWeighted(overlay, 0.78, annotated, 0.22, 0, annotated)
-    cv2.putText(
+    draw_banner(
         annotated,
-        summary,
-        (6, text_height + 5),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        scale,
-        (255, 255, 255),
-        thickness,
-        cv2.LINE_AA,
+        [
+            f"conf={threshold:.2f} IoU={iou_threshold:.2f} | correct={correct_count} "
+            f"errors={error_count} | green=TP red=miss orange=FP purple=wrong"
+        ],
     )
     return annotated
+
+
+def draw_banner(image: np.ndarray, lines: Sequence[str]) -> None:
+    """Write white text lines on a dark translucent band across the image top."""
+    scale = max(0.55, min(image.shape[:2]) / 1100)
+    thickness = max(1, round(min(image.shape[:2]) / 550))
+    line_height = cv2.getTextSize("Ag", cv2.FONT_HERSHEY_SIMPLEX, scale, thickness)[0][1] + 8
+    overlay = image.copy()
+    cv2.rectangle(
+        overlay, (0, 0), (image.shape[1] - 1, line_height * len(lines) + 10), (20, 20, 20), -1
+    )
+    cv2.addWeighted(overlay, 0.80, image, 0.20, 0, image)
+    for index, line in enumerate(lines, start=1):
+        cv2.putText(
+            image, line, (8, line_height * index), cv2.FONT_HERSHEY_SIMPLEX,
+            scale, (255, 255, 255), thickness, cv2.LINE_AA,
+        )
 
 
 def write_csv(path: Path, rows: Sequence[dict[str, object]]) -> None:
@@ -514,23 +500,12 @@ def write_csv(path: Path, rows: Sequence[dict[str, object]]) -> None:
         writer.writerows(rows)
 
 
-def create_contact_sheet(
-    gallery_dir: Path,
-    per_image_rows: Sequence[dict[str, object]],
-    output_path: Path,
-) -> None:
-    worst_rows = sorted(
-        per_image_rows,
-        key=lambda row: (
-            int(row["missed_dot"]),
-            int(row["total_errors"]),
-        ),
-        reverse=True,
-    )[:12]
+def create_contact_sheet(image_paths: Sequence[Path], output_path: Path) -> None:
+    """Tile the given images, letterboxed to 480x300, three per row."""
+    tile_width, tile_height, columns = 480, 300, 3
     tiles: list[np.ndarray] = []
-    tile_width, tile_height = 480, 300
-    for row in worst_rows:
-        source = cv2.imread(str(gallery_dir / str(row["gallery_file"])))
+    for path in image_paths:
+        source = cv2.imread(str(path))
         if source is None:
             continue
         scale = min(tile_width / source.shape[1], tile_height / source.shape[0])
@@ -542,18 +517,11 @@ def create_contact_sheet(
         tile = np.full((tile_height, tile_width, 3), 28, dtype=np.uint8)
         y_offset = (tile_height - resized.shape[0]) // 2
         x_offset = (tile_width - resized.shape[1]) // 2
-        tile[
-            y_offset : y_offset + resized.shape[0],
-            x_offset : x_offset + resized.shape[1],
-        ] = resized
+        tile[y_offset : y_offset + resized.shape[0], x_offset : x_offset + resized.shape[1]] = resized
         tiles.append(tile)
-
     if not tiles:
         return
-    columns = 3
-    blank = np.full_like(tiles[0], 28)
-    while len(tiles) % columns:
-        tiles.append(blank.copy())
+    tiles += [np.full_like(tiles[0], 28)] * (-len(tiles) % columns)
     rows = [np.hstack(tiles[index : index + columns]) for index in range(0, len(tiles), columns)]
     cv2.imwrite(str(output_path), np.vstack(rows))
 
@@ -656,6 +624,8 @@ def markdown_report(
 
 
 def main() -> int:
+    from ultralytics import YOLO
+
     args = parse_args()
     if not 0.0 < args.iou <= 1.0:
         raise ValueError("--iou must be in (0, 1]")
@@ -790,7 +760,15 @@ def main() -> int:
     write_csv(args.output / "selected_threshold_metrics.csv", selected_metrics)
     write_csv(args.output / "size_recall.csv", selected_size_rows)
     write_csv(args.output / "per_image.csv", per_image_rows)
-    create_contact_sheet(gallery_dir, per_image_rows, args.output / "worst_cases.jpg")
+    worst_rows = sorted(
+        per_image_rows,
+        key=lambda row: (int(row["missed_dot"]), int(row["total_errors"])),
+        reverse=True,
+    )[:12]
+    create_contact_sheet(
+        [gallery_dir / str(row["gallery_file"]) for row in worst_rows],
+        args.output / "worst_cases.jpg",
+    )
 
     object_count = sum(len(items) for items in ground_truth_by_image)
     summary = {

@@ -1,4 +1,4 @@
-# Controlled higher-resolution retraining experiment for tiny rail dots.
+# Best detector recipe so far (YOLO11n at 960 px for tiny rail dots).
 # Run from the repository root with:
 #   yolo detect train cfg=configs/train_yolo11n_960.yaml project=outputs/detection
 
@@ -24,8 +24,9 @@ deterministic: true
 optimizer: auto
 pretrained: true
 
-# Match configs/train.yaml; only resolution and the necessary memory-safe batch
-# size differ from the 640 baseline.
+# Preserve the single-table scene: only horizontal flips and mild broadcast-lighting
+# variation. Same policy as the earlier 640 baseline; only resolution and the
+# memory-safe batch size changed.
 mosaic: 0.0
 mixup: 0.0
 copy_paste: 0.0

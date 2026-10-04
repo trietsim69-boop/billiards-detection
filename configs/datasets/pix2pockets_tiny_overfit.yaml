@@ -1,8 +1,0 @@
-# Diagnostic-only dataset. Run Ultralytics commands from the repository root.
-# Train and validation intentionally reuse the same images to test memorization.
-path: .
-train: configs/datasets/pix2pockets_tiny_overfit.txt
-val: configs/datasets/pix2pockets_tiny_overfit.txt
-
-nc: 5
-names: ['Black', 'Cue', 'Dot', 'Solid', 'Striped']
