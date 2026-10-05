@@ -1,11 +1,11 @@
 # 🎱 8-Ball Pool Ball and Rail-Sight Detection
 
-**A YOLO11 detector for broadcast 8-ball pool frames. It finds every ball and the rail diamonds, then reconstructs the four table rails from the diamonds alone.**
+**A YOLO11 detector for broadcast 8-ball pool frames. It finds the balls and the rail diamonds, then reconstructs the four table rails from the diamonds alone.**
 
 ![YOLO11s](https://img.shields.io/badge/model-YOLO11s-blue) ![Input 1920 px](https://img.shields.io/badge/input-1920%20px-informational) ![mAP50 0.952](https://img.shields.io/badge/val%20mAP50-0.952-success) ![Rail fits 19/20](https://img.shields.io/badge/rail%20fits-19%2F20-success)
 
 <p align="center">
-  <img src="outputs/yolo11s-1920/rail-sweep/conf_015/100_png.rf.1d10e5312c53cc3fb4e0bf319dd466ba_rails.jpg" width="85%" alt="Rail sights detected and four rails fitted on a low-angle broadcast frame">
+  <img src="outputs/yolo11s-1920/examples/broadcast.jpg" width="85%" alt="Balls labelled by class, rail sights detected and four rails fitted on a broadcast frame">
 </p>
 
 ## 🚀 Summary
@@ -18,27 +18,23 @@
 
 ## 🖼️ Detection examples
 
-Rail sights are coloured by the rail they were assigned to; outliers are red, and the white quadrilateral joins the fitted rail intersections. All three frames come from the validation set, using the best model at confidence 0.15.
+Validation frames run through the best model end to end:
+- **Balls** (confidence ≥ 0.5) are boxed by class: Black purple, Cue white, Solid orange, Striped blue.
+- **Rail sights** (confidence ≥ 0.15) are coloured by the rail they were assigned to; outliers are red.
+- **The white quadrilateral** joins the four fitted rails, and the top banner summarises the fit.
 
 <table>
   <tr>
-    <td><img src="outputs/yolo11s-1920/rail-sweep/conf_015/78_png.rf.e4113b07a8da6a1795e7bb7519fab19a_rails.jpg" alt="Overhead table"></td>
-    <td><img src="outputs/yolo11s-1920/rail-sweep/conf_015/19_png.rf.9bdb39240f3b93c04a458babb9612353_rails.jpg" alt="Angled broadcast view"></td>
+    <td><img src="outputs/yolo11s-1920/examples/overhead.jpg" alt="Overhead table with balls and rails detected"></td>
+    <td><img src="outputs/yolo11s-1920/examples/low_angle.jpg" alt="Low-angle table with balls and rails detected"></td>
   </tr>
   <tr>
-    <td align="center">Overhead camera: 6/3/6/3 sights per rail, 0.59 px corner error</td>
-    <td align="center">Angled broadcast camera: 0.59 px corner error</td>
+    <td align="center">Overhead camera: 6/3/6/3 sights per rail, the ideal pattern</td>
+    <td align="center">Low-angle camera: strong perspective, rails still recovered</td>
   </tr>
 </table>
 
-Ball and sight predictions on eight validation frames (left: labels, right: model):
-
-<table>
-  <tr>
-    <td><img src="outputs/yolo11s-1920/val_batch0_labels.jpg" alt="Validation labels"></td>
-    <td><img src="outputs/yolo11s-1920/val_batch0_pred.jpg" alt="Validation predictions"></td>
-  </tr>
-</table>
+A few small or partly hidden balls fall below the 0.5 display threshold, such as the ball beside the black in the overhead frame.
 
 ## 📊 Results
 
@@ -184,16 +180,15 @@ All scripts default to the best model. Add `--device cpu` without a CUDA GPU. Ra
 
 ## 🏋️ Training
 
-The 1920 recipe needs about 16 GB of GPU memory; a free Google Colab T4 is enough. Store a read-only GitHub token for this repo as the Colab secret `GITHUB_TOKEN`, then run:
+The 1920 recipe needs about 16 GB of GPU memory; a free Google Colab T4 is enough. In a Colab notebook with a T4 runtime:
 
 ```python
-from google.colab import drive, userdata
-drive.mount('/content/drive')
-token = userdata.get('GITHUB_TOKEN')
-!git clone -q https://{token}@github.com/trietsim69-boop/8ballpool.git /content/8ballpool
-%cd /content/8ballpool
+!git clone -q https://github.com/trietsim69-boop/billiards-detection.git /content/billiards-detection
+%cd /content/billiards-detection
 !pip install -q ultralytics==8.4.124
-!yolo detect train cfg=configs/train_yolo11s_1920.yaml project=/content/drive/MyDrive/8ballpool/outputs
+from google.colab import drive
+drive.mount('/content/drive')
+!yolo detect train cfg=configs/train_yolo11s_1920.yaml project=/content/drive/MyDrive/billiards-detection/outputs
 ```
 
 - **Batch size:** keep `nbs` equal to `batch`; a smaller `nbs` silently increases weight decay. On out-of-memory errors use `batch=2 nbs=2`.

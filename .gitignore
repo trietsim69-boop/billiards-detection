@@ -4,3 +4,4 @@ runs/
 *.pt
 !outputs/**/*.pt
 __pycache__/
+CLAUDE.md

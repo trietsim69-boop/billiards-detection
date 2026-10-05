@@ -17,7 +17,7 @@ The default model for every script in this repo: `weights/best.pt` (19.4 MB, 9.4
 | Solid | 0.960 | 0.948 | 0.963 | 0.829 | +0.075 |
 | Striped | 0.965 | 0.952 | 0.966 | 0.815 | +0.039 |
 
-Every class improves on the 960 model, and this is the first run to raise Dot recall. Model size and resolution changed together, so their separate effects are unknown. Inference takes 37 ms per image on a T4. Curves and confusion matrices: `Box*_curve.png`, `confusion_matrix*.png`. Predictions on eight validation frames: [`val_batch0_pred.jpg`](val_batch0_pred.jpg), with labels in [`val_batch0_labels.jpg`](val_batch0_labels.jpg).
+Every class improves on the 960 model, and this is the first run to raise Dot recall. Model size and resolution changed together, so their separate effects are unknown. Inference takes 37 ms per image on a T4. Curves and confusion matrices: `Box*_curve.png`, `confusion_matrix*.png`. Predictions on eight validation frames: [`val_batch0_pred.jpg`](val_batch0_pred.jpg), with labels in [`val_batch0_labels.jpg`](val_batch0_labels.jpg). End-to-end examples (balls at confidence ≥ 0.5, sights at 0.15, fitted rails) on three validation frames are in [`examples/`](examples/).
 
 ## Dot centres
 
