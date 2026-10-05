@@ -17,10 +17,13 @@ YOLO11n detecting 5 classes: Black, Cue, Dot (rail sight), Solid, Striped.
 | Smoke test (3 epochs) | 512 | 3 | 0.524 | 0.589 | 0.487 | 0.283 | – | – |
 | Smoke test (3 epochs) | 640 | 3 | 0.499 | 0.718 | 0.650 | 0.437 | – | – |
 | Baseline | 640 | 46 | 0.931 | 0.806 | 0.854 | 0.665 | 0.640 | 0.640 |
-| **Best: `configs/train_yolo11n_960.yaml`** | **960** | **68** | **0.915** | **0.875** | **0.892** | **0.704** | **0.786** | **0.763** |
+| `configs/train_yolo11n_960.yaml` (laptop, repo default) | 960 | 68 | **0.915** | **0.875** | 0.892 | 0.704 | **0.786** | 0.763 |
+| **Same recipe at 1280 on a Colab T4** | **1280** | **55** | 0.913 | 0.873 | **0.926** | **0.734** | 0.778 | **0.839** |
 | Crop-aware fine-tune of the 960 model | 960 → 640 | 1 of 3 | 0.893 | 0.795 | 0.842 | 0.667 | – | – |
 
-The best recipe starts from pretrained `yolo11n.pt`, uses batch 1 (nbs 2), early stopping with patience 20, `amp=False`, seed 42, and deterministic training. Mosaic, scale, translate and mixup are off, so the single-table scene stays intact; the only augmentations are horizontal flips and mild HSV jitter. Going from 640 to 960 px raised Dot recall from 0.640 to 0.786; every Dot box is smaller than 32×32 px.
+The recipe starts from pretrained `yolo11n.pt`, with early stopping (patience 20), seed 42 and deterministic training. Mosaic, scale, translate and mixup are off, so the single-table scene stays intact; the only augmentations are horizontal flips and mild HSV jitter. On the laptop it runs at batch 1 (nbs 2) with `amp=False`. Going from 640 to 960 px raised Dot recall from 0.640 to 0.786; every Dot box is smaller than 32×32 px.
+
+The 1280 run used the same config with `imgsz=1280 batch=8 nbs=8 amp=True` on a free Colab T4 and finished in 15 minutes. It has the best mAP so far: Dot mAP50 rose from 0.763 to 0.839 and Dot mAP50-95 from 0.352 to 0.422, through higher precision and tighter boxes. Dot recall did not improve, so the hardest dots are still missed. Its dot-centre evaluation is pending, so the 960 model stays the repo default for now.
 
 The crop-aware fine-tune trained on 155 frames plus 620 overlapping tiles (AdamW, lr0 3e-4). Memory failures stopped it after 3 of 12 epochs and forced 640 px from epoch 2. It was not adopted.
 
@@ -53,7 +56,7 @@ A low confidence works best for geometry: line fitting discards stray candidates
 
 Developed on Windows with an NVIDIA MX550 (2 GB VRAM) in a project `.venv`: Python 3.12, PyTorch 2.9.0 + CUDA 12.6, torchvision 0.24.0, Ultralytics 8.4.124, OpenCV 5.0, PyYAML, matplotlib and pytest. Install the CUDA build of PyTorch from pytorch.org first, then `pip install ultralytics==8.4.124 pytest`.
 
-Trained weights and run outputs are committed under `outputs/`; the best model is `outputs/detection/baseline-yolo11n-960/weights/best.pt`. With 2 GB VRAM, 960 px training needs batch 1, `workers=0` and `plots=false`; keep `amp=False`, because the AMP check fails on this GPU.
+Trained weights and run outputs are committed under `outputs/`; the default model is `outputs/detection/baseline-yolo11n-960/weights/best.pt`. With 2 GB VRAM, 960 px training needs batch 1, `workers=0` and `plots=false`; keep `amp=False`, because the AMP check fails on this GPU. Larger runs go to Google Colab (below).
 
 ## Usage
 
@@ -77,6 +80,22 @@ Run everything from the repo root.
 ```
 
 `REAL_IMAGE_TESTING.md` explains how to read the rail-fitting overlays and warnings.
+
+### Training on Google Colab
+
+Use a T4 GPU runtime. Store a read-only GitHub token for this repo as the Colab secret `GITHUB_TOKEN`, then run:
+
+```python
+from google.colab import drive, userdata
+drive.mount('/content/drive')
+token = userdata.get('GITHUB_TOKEN')
+!git clone -q https://{token}@github.com/trietsim69-boop/8ballpool.git /content/8ballpool
+%cd /content/8ballpool
+!pip install -q ultralytics==8.4.124
+!yolo detect train cfg=configs/train_yolo11n_960.yaml imgsz=1280 batch=8 nbs=8 workers=2 amp=True plots=True project=/content/drive/MyDrive/8ballpool/outputs name=yolo11n-1280
+```
+
+Keep `nbs` equal to `batch`; the config's `nbs: 2` would otherwise scale weight decay by `batch / 2`. Results save to Google Drive, which survives disconnects; resume with `!yolo train resume model=<run>/weights/last.pt`. Copy finished runs into `outputs/detection/` to commit them.
 
 ## Data
 
