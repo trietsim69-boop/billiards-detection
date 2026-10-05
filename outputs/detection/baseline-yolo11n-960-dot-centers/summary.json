@@ -1,0 +1,91 @@
+{
+  "weights": "D:\\billiards project\\outputs\\detection\\baseline-yolo11n-960\\weights\\best.pt",
+  "data": "D:\\billiards project\\data\\processed\\pix2pockets_v3\\data.yaml",
+  "split": "val",
+  "image_directory": "D:\\billiards project\\data\\processed\\pix2pockets_v3\\valid\\images",
+  "image_count": 20,
+  "ground_truth_dot_count": 359,
+  "image_size": 960,
+  "prediction_nms_iou": 0.7,
+  "min_prediction_confidence": 0.01,
+  "confidence_thresholds": [
+    0.05,
+    0.1,
+    0.2,
+    0.25,
+    0.3,
+    0.4,
+    0.5
+  ],
+  "tolerances_model_px": [
+    4.0,
+    8.0,
+    12.0,
+    16.0
+  ],
+  "display_confidence": 0.5,
+  "display_tolerance_model_px": 8.0,
+  "fixed_confidence_metrics": [
+    {
+      "confidence": 0.5,
+      "tolerance_model_px": 4.0,
+      "tp": 314,
+      "fp": 4,
+      "fn": 45,
+      "precision": 0.9874213836477987,
+      "recall": 0.8746518105849582,
+      "f1": 0.9276218611521418,
+      "mean_error_model_px": 0.5147836173130604,
+      "median_error_model_px": 0.4290904089497032,
+      "p95_error_model_px": 1.1704998648202931,
+      "fully_matched_images": 11,
+      "image_count": 20
+    },
+    {
+      "confidence": 0.5,
+      "tolerance_model_px": 8.0,
+      "tp": 314,
+      "fp": 4,
+      "fn": 45,
+      "precision": 0.9874213836477987,
+      "recall": 0.8746518105849582,
+      "f1": 0.9276218611521418,
+      "mean_error_model_px": 0.5147836173130604,
+      "median_error_model_px": 0.4290904089497032,
+      "p95_error_model_px": 1.1704998648202931,
+      "fully_matched_images": 11,
+      "image_count": 20
+    },
+    {
+      "confidence": 0.5,
+      "tolerance_model_px": 12.0,
+      "tp": 315,
+      "fp": 3,
+      "fn": 44,
+      "precision": 0.9905660377358491,
+      "recall": 0.8774373259052924,
+      "f1": 0.9305760709010339,
+      "mean_error_model_px": 0.548250618255115,
+      "median_error_model_px": 0.4307691777114088,
+      "p95_error_model_px": 1.1842731843224101,
+      "fully_matched_images": 11,
+      "image_count": 20
+    },
+    {
+      "confidence": 0.5,
+      "tolerance_model_px": 16.0,
+      "tp": 315,
+      "fp": 3,
+      "fn": 44,
+      "precision": 0.9905660377358491,
+      "recall": 0.8774373259052924,
+      "f1": 0.9305760709010339,
+      "mean_error_model_px": 0.548250618255115,
+      "median_error_model_px": 0.4307691777114088,
+      "p95_error_model_px": 1.1842731843224101,
+      "fully_matched_images": 11,
+      "image_count": 20
+    }
+  ],
+  "test_split_used": false
+}

@@ -1,0 +1,94 @@
+{
+  "weights": "D:\\billiards project\\outputs\\detection\\baseline-yolo11n-960\\weights\\best.pt",
+  "data": "D:\\billiards project\\data\\processed\\pix2pockets_v3\\data.yaml",
+  "split": "val",
+  "image_directory": "D:\\billiards project\\data\\processed\\pix2pockets_v3\\valid\\images",
+  "image_count": 20,
+  "ground_truth_count": 582,
+  "image_size": 960,
+  "matching_iou": 0.5,
+  "prediction_nms_iou": 0.7,
+  "min_prediction_confidence": 0.01,
+  "swept_confidence_thresholds": [
+    0.05,
+    0.1,
+    0.2,
+    0.25,
+    0.3,
+    0.4,
+    0.5,
+    0.6,
+    0.7
+  ],
+  "selected_confidence_threshold": 0.4,
+  "threshold_selection_rule": "maximum Dot F1; ties prefer recall then proximity to 0.25",
+  "selected_metrics": [
+    {
+      "threshold": 0.4,
+      "class_id": 0,
+      "class_name": "Black",
+      "tp": 16,
+      "fp": 1,
+      "fn": 4,
+      "precision": 0.9411764705882353,
+      "recall": 0.8,
+      "f1": 0.8648648648648648
+    },
+    {
+      "threshold": 0.4,
+      "class_id": 1,
+      "class_name": "Cue",
+      "tp": 20,
+      "fp": 2,
+      "fn": 0,
+      "precision": 0.9090909090909091,
+      "recall": 1.0,
+      "f1": 0.9523809523809523
+    },
+    {
+      "threshold": 0.4,
+      "class_id": 2,
+      "class_name": "Dot",
+      "tp": 281,
+      "fp": 42,
+      "fn": 78,
+      "precision": 0.8699690402476781,
+      "recall": 0.7827298050139275,
+      "f1": 0.8240469208211143
+    },
+    {
+      "threshold": 0.4,
+      "class_id": 3,
+      "class_name": "Solid",
+      "tp": 83,
+      "fp": 3,
+      "fn": 14,
+      "precision": 0.9651162790697675,
+      "recall": 0.8556701030927835,
+      "f1": 0.907103825136612
+    },
+    {
+      "threshold": 0.4,
+      "class_id": 4,
+      "class_name": "Striped",
+      "tp": 75,
+      "fp": 2,
+      "fn": 11,
+      "precision": 0.974025974025974,
+      "recall": 0.872093023255814,
+      "f1": 0.9202453987730062
+    },
+    {
+      "threshold": 0.4,
+      "class_id": -1,
+      "class_name": "all",
+      "tp": 475,
+      "fp": 50,
+      "fn": 107,
+      "precision": 0.9047619047619048,
+      "recall": 0.8161512027491409,
+      "f1": 0.8581752484191508
+    }
+  ],
+  "test_split_used": false
+}

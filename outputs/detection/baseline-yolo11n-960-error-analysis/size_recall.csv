@@ -1,0 +1,10 @@
+class_name,size_group,ground_truth,matched,recall
+Black,medium_32_to_96px,12,10,0.8333333333333334
+Black,small_lt_32px,8,6,0.75
+Cue,medium_32_to_96px,11,11,1.0
+Cue,small_lt_32px,9,9,1.0
+Dot,small_lt_32px,359,281,0.7827298050139275
+Solid,medium_32_to_96px,46,46,1.0
+Solid,small_lt_32px,51,37,0.7254901960784313
+Striped,medium_32_to_96px,39,38,0.9743589743589743
+Striped,small_lt_32px,47,37,0.7872340425531915
