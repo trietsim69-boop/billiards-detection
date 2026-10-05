@@ -12,7 +12,7 @@ Run from the repo root with `.venv\Scripts\python.exe` (Python 3.12, Ultralytics
 
 ## Results
 
-`README.md` has the cross-model table; each trained model has `outputs/<model>/RESULTS.md` with weights, settings (`args.yaml`) and evaluations. Keep both in sync when a new run or evaluation lands. Compare dot-centre results across image sizes at the same physical tolerance: 8 px at 960 = 10.7 px at 1280 = 16 px at 1920.
+`README.md` reports only the best model and embeds its images straight from `outputs/yolo11s-1920/` (rail-fit overlays, curves, `val_batch0_*.jpg`), so moving or renaming those files breaks the README. Each trained model has `outputs/<model>/RESULTS.md` with weights, settings (`args.yaml`) and evaluations; keep it and the README in sync when a new run or evaluation lands. Compare dot-centre results across image sizes at the same physical tolerance: 8 px at 960 = 10.7 px at 1280 = 16 px at 1920.
 
 ## Data rules
 
