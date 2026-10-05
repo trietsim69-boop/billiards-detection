@@ -1,0 +1,2 @@
+confidence,tolerance_model_px,tp,fp,fn,precision,recall,f1,mean_error_model_px,median_error_model_px,p95_error_model_px,fully_matched_images,image_count
+0.5,16.0,262,4,97,0.9849624060150376,0.7298050139275766,0.8384,0.8583613280803101,0.7452639539230393,1.8265299797365584,7,20

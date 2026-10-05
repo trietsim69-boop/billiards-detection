@@ -1,7 +1,7 @@
 # Table Detection Progress
 
 Last updated: 2026-10-05
-Current position: a 1280 px YOLO11n run on a Colab T4 has the best validation mAP (Dot mAP50 0.839 vs 0.763 at 960); its dot-centre evaluation is pending, so the 960 px detector remains the repo default
+Current position: YOLO11s at 1920 px on a Colab T4 has the best validation metrics so far (Dot recall 0.844, Dot mAP50 0.895, all mAP50-95 0.770); its dot-centre and rail-fitting evaluations are pending, so the 960 px detector remains the repo default
 
 This file is the short operational tracker. `TABLE_DETECTION_PLAN.md` contains the explanations, design decisions, and executable checkpoint details.
 
@@ -16,6 +16,7 @@ This file is the short operational tracker. `TABLE_DETECTION_PLAN.md` contains t
 | Reproducible YOLO11n baseline | Done | Best epoch 46; validation mAP50 0.854 and mAP50-95 0.665 |
 | Higher-resolution YOLO11n retrain | Done | Resumed run stopped normally via patience; best checkpoint at displayed epoch 68, with Dot recall 0.786 and Dot mAP50 0.763 |
 | 1280 px YOLO11n retrain (Colab T4) | Trained; dot-centre evaluation pending | Best epoch 55; validation mAP50 0.926, mAP50-95 0.734, Dot mAP50 0.839, Dot recall 0.778; weights in Google Drive |
+| 1920 px YOLO11s retrain (Colab T4) | Trained; best so far; dot-centre and rail evaluation pending | Best epoch 27; validation mAP50 0.952, mAP50-95 0.770, Dot mAP50 0.895, Dot recall 0.844; weights in Google Drive |
 | Validation error analysis | Done | Threshold sweep, size metrics, per-image counts, and 20-image gallery generated |
 | Dot-centre diagnostic | Done on validation | At 960 px and 8 px tolerance, original full frame plus epoch-3 crop dots gives recall 0.955 and F1 0.959; older 640 px metrics are retained below |
 | Initial rail-first inference | Evaluated; not promoted | Normalized rail-crop YOLO regressed to 61/359 matched dots versus 324/359 full-frame matches at confidence 0.25 |
@@ -70,6 +71,36 @@ This file is the short operational tracker. `TABLE_DETECTION_PLAN.md` contains t
 - [x] Kept the held-out test split untouched.
 
 ## Latest detector evidence
+
+### Standard validation metrics — YOLO11s at 1920 px on Colab, 2026-10-05
+
+Same recipe as `configs/train_yolo11n_960.yaml` with
+`model=yolo11s.pt imgsz=1920 batch=4 nbs=4 workers=2 cache=ram amp=True plots=True`,
+on the same Colab T4 setup as the 1280 run. 1920 px is the broadcast frames'
+native width, so dots are not downscaled. Early stopping ended the run after 47
+epochs in 0.42 hours; the best checkpoint is epoch 27. Metrics are Ultralytics'
+final validation of the stripped `best.pt` (19.4 MB, 9.4M parameters). The test
+split remains untouched.
+
+| Class | Precision | Recall | mAP50 | mAP50-95 | Δ mAP50 vs 960 |
+|---|---:|---:|---:|---:|---:|
+| All | 0.938 | 0.929 | 0.952 | 0.770 | +0.060 |
+| Black | 0.954 | 0.900 | 0.943 | 0.807 | +0.053 |
+| Cue | 0.960 | 1.000 | 0.995 | 0.905 | +0.005 |
+| Dot | 0.854 | 0.844 | 0.895 | 0.494 | +0.132 |
+| Solid | 0.960 | 0.948 | 0.963 | 0.829 | +0.075 |
+| Striped | 0.965 | 0.952 | 0.966 | 0.815 | +0.039 |
+
+This is the first change that raised Dot recall (0.786 → 0.844, about 21 more
+of 359 dots); every class improves on the 960 model. Model size and resolution
+changed together, so their separate contributions are unknown. Inference costs
+37.4 ms per image on the T4, against 9.2 ms for YOLO11n at 1280.
+
+Decision: best candidate, not yet promoted. Next, run
+`scripts/analyze_dot_centers.py` at imgsz 1920 with a 16 px tolerance (equal to
+8 px at 960) and `scripts/sweep_rail_confidence.py` at imgsz 1920, then copy
+the run from Google Drive (`MyDrive/8ballpool/outputs/yolo11s-1920`) into
+`outputs/detection/` and make it the script default.
 
 ### Standard validation metrics — 1280 px retrain on Colab, 2026-10-05
 

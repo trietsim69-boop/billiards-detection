@@ -1,6 +1,6 @@
 # Phase 1 Closure and Phase 2 Task Checklist
 
-Date: 2026-09-14. Plan: [plan.md](plan.md).
+Date: 2026-09-14; Task 4 and Phase 2 (Tasks 5-11) replanned 2026-10-05. Plan: [plan.md](plan.md).
 All implementation paths and commands below refer to `D:\billiards project`.
 Use its `.venv\Scripts\python.exe`; `python` below abbreviates that interpreter.
 Commands for proposed scripts/tests become executable when their task is implemented.
@@ -70,9 +70,13 @@ already specified in Phase 1.6. Keep raw evidence available for every decision.
 ## Task 4: Select the detector operating point
 
 **Description:** Close Phase 1 with a bounded comparison using all 20 validation
-images and unchanged rail-fitting gates. Reuse compatible saved predictions.
-Compare the original 640/960 models and justified Dot-only crop candidates; select
-by geometry correctness and coverage as well as detection quality and runtime.
+images and unchanged rail-fitting gates. Compare the 960 model (repo default) with
+the 1280 Colab model; first copy its weights from Google Drive
+(`MyDrive/8ballpool/outputs/yolo11n-1280`) into `outputs/detection/`. Score dot
+centres at 8 px (960) and 10.7 px (1280), and re-sweep the rail Dot confidence.
+The 640 and crop artifacts were removed; their recorded numbers stand and are not
+re-run. Select by geometry correctness and coverage as well as detection quality
+and runtime.
 
 **Acceptance criteria:**
 
@@ -86,179 +90,159 @@ by geometry correctness and coverage as well as detection quality and runtime.
 **Files likely touched:** `scripts/sweep_rail_confidence.py`, `configs/detection.yaml`, `scripts/detect_image.py`, `tests/test_rail_confidence_sweep.py`, `TABLE_DETECTION_PROGRESS.md`.
 **Estimated scope:** Medium, up to 5 files.
 
-## Task 5: Freeze the grouped geometry manifest
+## Task 5: Freeze geometry dev/holdout groups
 
-**Description:** Make a deterministic development/holdout assignment for the 52
-geometry images, keeping all views of each of the documented 25 situations together.
-
-**Acceptance criteria:**
-
-- [ ] Every image has a verified situation ID and view label, appears exactly once, and stays grouped with its other views; mismatches in the documented situation count are investigated before freezing.
-- [ ] Save the chosen seed, group counts, split assignment, and source identifiers/hash; keep detector test examples out of geometry development.
-- [ ] Mark a clear/full-pattern development subset using recorded visibility criteria; preserve the full manifest and report exclusions without silently dropping evaluation cases.
-
-**Verification:** `python -m pytest -q tests/test_geometry_split.py`; regenerate in memory twice and compare assignments; review the manifest counts and verify no situation crosses groups. No model run is needed.
-
-**Dependencies:** Task 1.
-**Files likely touched:** `scripts/prepare_geometry_split.py`, `configs/datasets/geometry_groups.csv`, `tests/test_geometry_split.py`.
-**Estimated scope:** Medium, 3 files.
-
-## Checkpoint B: Phase boundary
-
-- [ ] Tasks 4-5 pass; the selected detector satisfies the existing Phase 1 prototype gates.
-- [ ] Group assignment is frozen before geometry-specific tuning.
-- [ ] Detector selection evidence and geometry manifest are ready for review.
-
-## Task 6: Capture reviewed playable-bed geometry
-
-**Description:** Add a small annotation/import workflow for four inner-cushion
-lines or corners, with overlays and explicit orientation. Start with a pilot of
-clear development images to establish the convention before annotating more.
+**Description:** Assign the 25 geometry situations to dev or holdout once,
+deterministically, and commit the list. `split_manifest.csv` already maps every
+image to `situation-NN`, so no new manifest file is needed.
 
 **Acceptance criteria:**
 
-- [ ] Store image dimensions/ID, group, corner order, physical long-side role, visibility, provenance, and reviewed status; reference immutable images rather than duplicate them.
-- [ ] Annotate the cushion-nose/playable-bed boundary, distinguish it from the sight row, and reject invalid or genuinely unobservable geometry instead of guessing it.
-- [ ] Inspect every pilot overlay and independently repeat a subset of annotations to measure variation before applying the convention to the larger reference set.
+- [ ] `configs/geometry.yaml` gains a sorted `holdout_situations` list, the seed, and the one-line command that produced it (13 dev / 12 holdout unless plan Open Question 4 says otherwise).
+- [ ] A test reads the manifest and config: 52 geometry images, 25 situations, every image in exactly one group, no situation in both, and every situation with its top view.
+- [ ] No later task opens holdout images before Task 11.
 
-**Verification:** `python -m pytest -q tests/test_geometry_annotations.py`; `python scripts/annotate_table_geometry.py --help`; import or capture one annotation, reload it, and inspect its rendered corner/line labels.
+**Verification:** `.venv\Scripts\pytest.exe -q tests/test_geometry_split.py`. No model run.
 
-**Dependencies:** Task 5.
-**Files likely touched:** `src/billiards/geometry_annotations.py`, `scripts/annotate_table_geometry.py`, `data/annotations/table_geometry_v1.jsonl`, `tests/test_geometry_annotations.py`.
-**Estimated scope:** Medium, 4 files; bounded pilot only.
+**Dependencies:** None.
+**Files likely touched:** `configs/geometry.yaml`, `tests/test_geometry_split.py`.
+**Estimated scope:** XS, 2 files.
 
-## Task 7: Produce a normalized table state from four corners
+## Task 6: Labelled dots → sight homography with numbered overlay
 
-**Description:** Deliver the first complete Phase 2 path: an image, reviewed
-playable-bed corners, and labelled balls produce a 2:1 table state, a warped view,
-and a top-down ball diagram. The same explicit corner input becomes the manual fallback.
+**Description:** First vertical slice. A labelled image goes through `fit_rails`,
+sight-to-template correspondence and `cv2.findHomography`, and comes out as a
+numbered sight overlay, a warped top-down image and JSON. Reuse the label
+loaders, image discovery and rail rendering in `scripts/fit_table_rails.py`.
 
 **Acceptance criteria:**
 
-- [ ] Map ordered physical bed corners to `(0,0),(2,0),(2,1),(0,1)` with named forward/inverse normalized transforms, without changing the current pixel-sized rail-strip contract.
-- [ ] Project ball anchors while retaining class, source ID, and original coordinates; output JSON, source overlay, and top-down diagram with the calibration method. Ball-box-centre projection is identified as an approximation.
-- [ ] Reject nonfinite, crossing, duplicate, degenerate, or unresolved-orientation inputs; validate projected points and preserve failure reasons without clamping them into a plausible table.
+- [ ] `src/billiards/table_state.py` provides an 18-point sight template with the rail offset (`sight_offset_in: 3.6875`, `bed_width_in: 50` in `configs/geometry.yaml`). Its correspondence step requires 6/3/6/3 rail support, orders each rail's inliers along the rail and maps clockwise to clockwise. Any other input returns a reason such as `sight_pattern:6/3/5/3` or `invalid_rail_fit`, never a homography.
+- [ ] Synthetic test: template projected through a known perspective homography, shuffled, plus two off-rail outliers. The recovered `H` puts every sight within 1e-5 units and round-trips image points within 1e-3 px. Rotating the input 180° gives the 180°-equivalent state; one missing sight gives a failure reason.
+- [ ] `scripts/detect_table_state.py --mode labels --source <image|dir> --output outputs/geometry/<run>` writes the overlay, warp and JSON per image (`method: automatic_sights`, `H` image→table, sight residuals, failure reason). Run it on the 20 validation images and all dev views, and report full-pattern coverage on dev. If most dev views fail, raise partial-pattern matching before Task 8.
 
-**Verification:** `python -m pytest -q tests/test_table_state.py`; assert synthetic normalized corner error below `1e-5` and source-coordinate round-trip error below `1e-3` px on well-conditioned fixtures; run `python scripts/detect_table_state.py --help` and a manual-corner example with labelled balls.
+**Verification:** `.venv\Scripts\pytest.exe -q tests/test_table_state.py tests/test_geometry.py`; `python -m compileall -q src scripts`; inspect every overlay and warp: straight rails, side pockets at `x = 1`, no mirroring.
 
-**Dependencies:** Task 6; reuse Task 2 representation where useful.
-**Files likely touched:** `src/billiards/table_state.py`, `scripts/detect_table_state.py`, `tests/test_table_state.py`, `REAL_IMAGE_TESTING.md`.
+**Dependencies:** Task 5 for dev images (validation images can be used earlier).
+**Files likely touched:** `src/billiards/table_state.py`, `scripts/detect_table_state.py`, `tests/test_table_state.py`, `configs/geometry.yaml`.
 **Estimated scope:** Medium, 4 files.
 
-## Task 8: Establish the labelled-ball geometry baseline
+## Task 7: Balls → normalized table state, plus manual corners
 
-**Description:** Extend reviewed annotations across validation and geometry
-development images using the pilot convention. Compare projected labelled balls
-across matched views, then freeze real-image acceptance limits before selecting
-the automatic geometry path.
-
-**Acceptance criteria:**
-
-- [ ] Every selected development image has reviewed geometry or an explicit unobservable status; repeat-annotation variation and all exclusions are reported. Process annotation batches separately if the full set exceeds one session.
-- [ ] Report bed-corner error, projection residuals, matched-view ball-position error, orientation consistency, and usable coverage; use explicit matches for same-class balls and expose ambiguous correspondences.
-- [ ] Record justified numerical acceptance limits and the target domain in geometry configuration using development evidence only. Do not use the four input corners' own zero reprojection error as independent validation.
-
-**Verification:** `python -m pytest -q tests/test_geometry_evaluation.py tests/test_table_state.py`; run `python scripts/evaluate_table_state.py --help` and its development evaluation; inspect every overlay and matched-view layout in the report.
-
-**Dependencies:** Tasks 5-7.
-**Files likely touched:** `scripts/evaluate_table_state.py`, `tests/test_geometry_evaluation.py`, `configs/geometry.yaml`, `data/annotations/table_geometry_v1.jsonl`.
-**Estimated scope:** Medium, 4 files; annotation batches are bounded review sessions.
-
-## Checkpoint C: Reviewed/manual geometry
-
-- [ ] Tasks 6-8 pass; manual corners and labelled balls produce a correct, repeatable normalized layout.
-- [ ] Synthetic tests pass and real-image acceptance limits are documented before automatic selection.
-- [ ] Corner conventions, annotation variation, and ball-anchor limitations are ready for review.
-
-## Task 9: Verify canonical sight correspondence
-
-**Description:** Add a diagnostic that orders labelled rail sights and relates
-them to the canonical 6/3 pattern. Keep the sight geometry distinct from the
-playable-bed geometry already established by reviewed corners.
+**Description:** Complete the image-to-state path. Labelled balls project into
+table coordinates, and four supplied inner-cushion corners give the manual path
+through the same code.
 
 **Acceptance criteria:**
 
-- [ ] Number and visualize the labelled sight correspondences on source/template views; account for side-pocket gaps and the verified long/short-side orientation.
-- [ ] Reject ambiguous, insufficient, or inconsistent ordering; shuffled input produces the same valid assignment. Handle the initial clear/full-pattern scope explicitly.
-- [ ] Export sight correspondences, residuals, and any sight transform with its physical-plane label; never feed that transform into ball projection as if it were the bed transform.
+- [ ] Ball box centres (Black, Cue, Solid, Striped) project through `H` into `x ∈ [0,2], y ∈ [0,1]`. JSON keeps class, source index, `image_xy` and `table_xy`. Balls more than one ball radius outside the bed are flagged with a reason, never clamped. A 1000×500 top-down diagram shows pockets and class-coloured balls.
+- [ ] `--corners x1 y1 x2 y2 x3 y3 x4 y4` (inner-cushion corners, clockwise, first edge a long rail) maps the bed to `(0,0),(2,0),(2,1),(0,1)` with `method: manual_corners`. Nonfinite, duplicate, crossing or degenerate corners are rejected with a reason. A failed automatic fit without `--corners` returns its failure; nothing is substituted silently.
+- [ ] Synthetic test: balls placed in table coordinates, projected into the image and back, round-trip within 1e-3 px, and the JSON has no NaN/Infinity. `REAL_IMAGE_TESTING.md` documents both methods and their parallax approximation. If plan Open Question 1 is approved, update the two-plane bullet in `CLAUDE.md`.
 
-**Verification:** `python -m pytest -q tests/test_sight_correspondence.py tests/test_geometry.py`; run `python scripts/check_sight_correspondence.py --help` and render all eligible labelled development cases. Verify orientation on steep-perspective fixtures.
+**Verification:** `.venv\Scripts\pytest.exe -q tests/test_table_state.py`; run one automatic and one manual example; compare each top-down diagram with its source image.
 
-**Dependencies:** Tasks 5-6; Task 8 before any new real-image threshold selection.
-**Files likely touched:** `src/billiards/sight_correspondence.py`, `scripts/check_sight_correspondence.py`, `tests/test_sight_correspondence.py`.
-**Estimated scope:** Medium, 3 files.
+**Dependencies:** Task 6.
+**Files likely touched:** `src/billiards/table_state.py`, `scripts/detect_table_state.py`, `tests/test_table_state.py`, `REAL_IMAGE_TESTING.md`, `CLAUDE.md`.
+**Estimated scope:** Medium, 5 files.
 
-## Task 10: Evaluate automatic playable-bed geometry
+## Checkpoint B: Labelled image → table state
 
-**Description:** Measure the existing automatic table locator against reviewed
-inner-cushion geometry and use sight evidence as a separate consistency check.
-Attempt only corrections attributable to measured failures within this task's scope.
+- [ ] Tasks 5-7 pass; one command turns a labelled image, or an image plus four corners, into table-state JSON, overlay, warp and top-down diagram.
+- [ ] The full suite and `compileall` pass.
+- [ ] Overlays and the JSON schema reviewed with the human before measuring accuracy.
 
-**Acceptance criteria:**
+## Task 8: Matched-view accuracy on dev; freeze limits
 
-- [ ] Report predicted bed-corner/line errors, orientation mistakes, rejected cases, and falsely accepted geometry across complete development splits, using Task 8 limits.
-- [ ] Accepted automatic geometry has explicit evidence for bed boundaries and long-side orientation; color-mask agreement or sight-line structure alone cannot certify it.
-- [ ] Promote only if the frozen development bar is met. Otherwise record the automatic gate as open and name the next targeted change; the usable manual path does not imply automatic completion.
-
-**Verification:** `python -m pytest -q tests/test_table_localization.py tests/test_geometry_evaluation.py tests/test_sight_correspondence.py`; run the development evaluation, inspect every false accept, and verify insufficient geometry returns a failure reason.
-
-**Dependencies:** Tasks 8-9.
-**Files likely touched:** `src/billiards/table_localization.py`, `scripts/evaluate_table_state.py`, `tests/test_table_localization.py`, `tests/test_geometry_evaluation.py`, `configs/geometry.yaml`.
-**Estimated scope:** Medium, up to 5 files; new learned localization training requires a separate follow-up plan.
-
-## Task 11: Connect the detector to table-state output
-
-**Description:** Extend the working table-state CLI to consume Phase 1 detections,
-check rails, choose validated automatic bed geometry when available, and accept
-manual corners when automatic geometry fails.
+**Description:** Measure label-mode geometry the way Pix2Pockets did: every
+non-top dev view against its situation's top view. Add one absolute check for
+errors that matched views cannot see.
 
 **Acceptance criteria:**
 
-- [ ] A single input image produces detections, geometry diagnostics, normalized balls, and both visual outputs with model/config identity and coordinate systems recorded.
-- [ ] Detector, sight, bed, and projection failures remain distinguishable; failed automatic calibration requests corners or returns a structured failure, and supplied manual corners are labelled as manual.
-- [ ] Compare predicted inputs with the labelled baseline on identical development images; record accuracy, failure coverage, and runtime without changing frozen thresholds to mask failures.
+- [ ] `scripts/evaluate_table_state.py` runs label mode on all dev images. It aligns each non-top view to its top view (0°/180°, minimum error) and matches balls per class by minimum total distance (permutations, ≤7 per class, no scipy). It reports per-view and overall median/p90/max error in units and cm (1 unit = 127 cm), split by `a`/`f` view, plus coverage and every rejection with its reason.
+- [ ] Absolute check: sight-derived bed corners against human-entered inner-cushion corners on 5 dev top views (`data/annotations/bed_corners_dev.csv`). A systematic scale error means the config (`sight_offset_in`, `bed_width_in`) is wrong, not the code.
+- [ ] Acceptance limits go into `configs/geometry.yaml` from dev evidence only (proposed: p90 ≤ one ball radius, plan Open Question 2). Record whether Task 9 is needed: yes if the bar is missed or angled views err along the viewing direction.
 
-**Verification:** `python -m pytest -q tests/test_table_state_pipeline.py tests/test_table_state.py tests/test_detection_filtering.py`; CLI checks for one valid automatic case, one rejected case, and that rejected case with manual corners. If Task 10 remains open, verify manual integration and leave automatic acceptance unchecked.
+**Verification:** `.venv\Scripts\pytest.exe -q tests/test_geometry_evaluation.py` (matching and 180° alignment on synthetic fixtures); run the evaluator; inspect the five worst views.
 
-**Dependencies:** Tasks 4, 7-10; automatic success requires Task 10 to pass.
-**Files likely touched:** `scripts/detect_table_state.py`, `src/billiards/table_state.py`, `tests/test_table_state_pipeline.py`, `REAL_IMAGE_TESTING.md`.
+**Dependencies:** Task 7; the human supplies the 20 corner points.
+**Files likely touched:** `scripts/evaluate_table_state.py`, `tests/test_geometry_evaluation.py`, `configs/geometry.yaml`, `data/annotations/bed_corners_dev.csv`, `TABLE_DETECTION_PROGRESS.md`.
+**Estimated scope:** Medium, 5 files.
+
+## Task 9 (conditional): Project balls onto the ball-centre plane
+
+**Description:** Build this only if Task 8 calls for it. Recover the focal length
+and camera pose from `H_sight` (principal point at the image centre, square
+pixels). Then map image points onto the plane `z = R`, where ball centres are,
+instead of the sight plane. Fit the sight height above the bed (one scalar) on
+dev matched views.
+
+**Acceptance criteria:**
+
+- [ ] Synthetic camera test: with known intrinsics and pose, points at `z = R` are recovered within 1e-4 units. Near-top-down views, where the focal length is ill-conditioned, fall back to `H_sight` with a warning.
+- [ ] The manual-corners path uses the same correction (bed plane → ball plane).
+- [ ] On the same dev views, matched-view error improves on Task 8. The fitted sight height and before/after numbers are recorded, and the Task 8 limits stay unchanged.
+
+**Verification:** `.venv\Scripts\pytest.exe -q tests/test_table_state.py`; rerun the Task 8 evaluator.
+
+**Dependencies:** Task 8.
+**Files likely touched:** `src/billiards/table_state.py`, `tests/test_table_state.py`, `configs/geometry.yaml`.
+**Estimated scope:** Small, 3 files.
+
+## Checkpoint C: Label-mode geometry measured
+
+- [ ] Dev matched-view error, coverage and the absolute check are recorded; limits are frozen in config.
+- [ ] Task 9 is either done or explicitly skipped with its reason.
+- [ ] Reviewed with the human before any YOLO input.
+
+## Task 10: YOLO detections → table state
+
+**Description:** Replace labels with the detector selected in Task 4, read
+through the Task 3 filtered-detection contract.
+
+**Acceptance criteria:**
+
+- [ ] `--mode yolo` uses the Task 4 model and Dot confidence plus Task 3 filtered balls, and the JSON records the model SHA256 and settings. A rail with more inliers than sight slots keeps its highest-confidence dots (marked `# ponytail:` heuristic, ceiling noted); otherwise it is rejected.
+- [ ] The evaluator runs YOLO mode on the Task 8 dev images and reports error, coverage, false accepts (accepted geometry over the limit) and the failing stage (detector, rail fit, sight pattern, projection) beside the label results.
+- [ ] A rejected dev image rerun with `--corners` produces a `manual_corners` state.
+
+**Verification:** `.venv\Scripts\pytest.exe -q`; CLI runs on one accepted image, one rejected image, and the rejected image with corners.
+
+**Dependencies:** Tasks 3, 4, 8 (and 9 if built).
+**Files likely touched:** `scripts/detect_table_state.py`, `scripts/evaluate_table_state.py`, `tests/test_table_state.py`, `REAL_IMAGE_TESTING.md`.
 **Estimated scope:** Medium, 4 files.
 
-## Checkpoint D: Integrated state detection
+## Checkpoint D: Automatic inputs
 
-- [ ] Tasks 9-11 meet their acceptance criteria; the full suite and CLI paths pass.
-- [ ] Automatic success, explicit rejection, and manual recovery are independently demonstrated.
-- [ ] Any unpassed automatic gate remains open; the integration report is ready for review.
+- [ ] Automatic success, structured rejection and manual recovery are each shown on dev images.
+- [ ] Label and YOLO results on identical images are side by side; the full suite passes.
 
-## Task 12: Run frozen evaluation and record the phase verdict
+## Task 11: Frozen holdout run and verdict
 
-**Description:** Freeze code, weights, settings, and group manifest before final
-geometry evaluation. Complete reviewed holdout annotations using the established
-convention without model-guided corrections, then report the frozen pipeline.
+**Description:** Freeze everything, run the holdout situations once, and record
+the Phase 2 verdict.
 
 **Acceptance criteria:**
 
-- [ ] Record a versioned run manifest before holdout inference. Holdout annotation review follows the fixed convention and does not tune thresholds; detector test is used only after detector choices are also frozen.
-- [ ] Report the complete holdout denominator, coverage, false accepts/rejects, bed and ball errors, manual recovery, and runtime against the predetermined limits; manual and automatic results remain separate.
-- [ ] Update the progress and main plan with passed/open gates and exact artifact locations. A failed gate prevents a Phase 2 completion claim and produces a bounded follow-up rather than retuning against the same holdout.
+- [ ] Commit hash, weights SHA256 and configs are written to `outputs/geometry/<run>/` before the first holdout inference; no code or threshold changes afterwards.
+- [ ] The report covers the full holdout denominator: label and YOLO error against the frozen limits, coverage, false accepts, manual recoveries and runtime.
+- [ ] `TABLE_DETECTION_PROGRESS.md`, `README.md` and the `CLAUDE.md` status are updated. A missed bar becomes a named follow-up, not a retune.
 
-**Verification:** `python -m pytest -q`; `python -m compileall -q src scripts`; run the frozen evaluator and CLI examples, inspect all false accepts, and verify reported counts against the manifest. Review only the intended source/document diff; preserve existing user edits and omit bytecode.
+**Verification:** `.venv\Scripts\pytest.exe -q`; `python -m compileall -q src scripts`; report counts match the config's holdout list.
 
-**Dependencies:** Tasks 1-11 and their checkpoints.
-**Files likely touched:** `scripts/evaluate_table_state.py`, `configs/geometry_evaluation.yaml`, `data/annotations/table_geometry_v1.jsonl`, `TABLE_DETECTION_PROGRESS.md`, `TABLE_DETECTION_PLAN.md`.
-**Estimated scope:** Medium, up to 5 files; holdout annotation review is batched without algorithm changes.
+**Dependencies:** Task 10.
+**Files likely touched:** `TABLE_DETECTION_PROGRESS.md`, `README.md`, `CLAUDE.md`.
+**Estimated scope:** Small, 3 files.
 
 ## Checkpoint E: Completion evidence
 
-- [ ] Every task's acceptance criteria and the shared Definition of Done are met.
-- [ ] Phase 1 status, Phase 2 status, uncertainty, and any follow-up are supported by saved evidence.
-- [ ] Changes and results are ready for human review; no merge or deployment is implied.
+- [ ] Every task's acceptance criteria and the Definition of Done in `plan.md` are met.
+- [ ] Phase 1 and Phase 2 status, uncertainty and follow-ups are backed by saved evidence.
+- [ ] Ready for human review; no merge implied.
 
 ## Planning verification
 
-- [x] Each task has at most three acceptance criteria, verification, dependencies, and a file scope.
-- [x] Existing code, experimental results, and the newer two-plane requirement informed the plan.
-- [x] Dataset presence was verified outside the restricted sandbox; restoration was removed from the proposed work.
-- [x] No existing incomplete plan was overwritten; no implementation was performed.
-- [x] Checkpoints separate the major deliverables.
-- [ ] Human has reviewed the proposed implementation plan.
+- [x] Each task has at most three acceptance criteria, verification, dependencies and a file scope (≤5 files).
+- [x] Phase 2 reuses `fit_rails`, the label/YOLO loaders and the existing split manifest; nothing depends on removed code.
+- [x] Phase 1 Tasks 1-3 were kept; Task 4 now targets the 960/1280 comparison.
+- [ ] Human has reviewed the plan and answered its open questions.

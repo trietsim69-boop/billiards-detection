@@ -1,0 +1,43 @@
+{
+  "weights": "/content/drive/MyDrive/8ballpool/outputs/yolo11s-1920/weights/best.pt",
+  "data": "/content/8ballpool/data/processed/pix2pockets_v3/data.yaml",
+  "split": "val",
+  "image_directory": "/content/8ballpool/data/processed/pix2pockets_v3/valid/images",
+  "image_count": 20,
+  "ground_truth_dot_count": 359,
+  "image_size": 1920,
+  "prediction_nms_iou": 0.7,
+  "min_prediction_confidence": 0.01,
+  "confidence_thresholds": [
+    0.05,
+    0.1,
+    0.2,
+    0.25,
+    0.3,
+    0.4,
+    0.5
+  ],
+  "tolerances_model_px": [
+    16.0
+  ],
+  "display_confidence": 0.5,
+  "display_tolerance_model_px": 16.0,
+  "fixed_confidence_metrics": [
+    {
+      "confidence": 0.5,
+      "tolerance_model_px": 16.0,
+      "tp": 262,
+      "fp": 4,
+      "fn": 97,
+      "precision": 0.9849624060150376,
+      "recall": 0.7298050139275766,
+      "f1": 0.8384,
+      "mean_error_model_px": 0.8583613280803101,
+      "median_error_model_px": 0.7452639539230393,
+      "p95_error_model_px": 1.8265299797365584,
+      "fully_matched_images": 7,
+      "image_count": 20
+    }
+  ],
+  "test_split_used": false
+}

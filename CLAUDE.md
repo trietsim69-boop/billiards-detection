@@ -2,7 +2,7 @@
 
 Single broadcast image of an 8-ball table → YOLO detections (balls + rail sights) → four rail lines → bed homography → normalized 2:1 table state. Shot ranking comes later. Research prototype on Windows with a small local GPU.
 
-Status (2026-10-05): Phase 1 (detector) is nearly closed; the detection JSON contract, the 1280-vs-960 dot-centre comparison and the Dot-confidence selection remain open. Phase 2 (geometry) has rail fitting only; homography, table state and the manual four-corner fallback are not started. Next work is `tasks/todo.md` Tasks 1–3.
+Status (2026-10-05): Phase 1 (detector) is nearly closed; the detection JSON contract, the dot-centre and rail evaluation of the 1920 YOLO11s candidate, and the Dot-confidence selection remain open. Phase 2 (geometry) has rail fitting only; homography, table state and the manual four-corner fallback are not started. Next work is `tasks/todo.md` Tasks 1–3.
 
 ## Commands
 
@@ -18,7 +18,10 @@ Run from the repo root with `.venv\Scripts\python.exe` (Python 3.12, Ultralytics
 Full per-method tables are in `README.md`; validation split, 20 images.
 
 - **Best trained detector:** `outputs/detection/baseline-yolo11n-960/weights/best.pt` from `configs/train_yolo11n_960.yaml`. Recipe: pretrained `yolo11n.pt`, imgsz 960, batch 1 / nbs 2, patience 20, `amp=False`, seed 42 deterministic, mosaic/scale/translate/mixup off, only `fliplr 0.5` + mild HSV. Epoch 68: mAP50 0.892, mAP50-95 0.704, Dot recall 0.786, Dot mAP50 0.763. The 640 baseline reached 0.854 / 0.665 / Dot recall 0.640. This is still the repo default.
-- **Best validation mAP:** the same recipe at `imgsz=1280 batch=8 nbs=8 amp=True` on a Colab T4, epoch 55: mAP50 0.926, mAP50-95 0.734, Dot mAP50 0.839, Dot recall 0.778. Precision and box tightness improved, but recall did not. Not promoted yet: its dot-centre evaluation (imgsz 1280, tolerance 10.7 px) is pending, and its weights are still in Google Drive (`MyDrive/8ballpool/outputs/yolo11n-1280`), not in `outputs/`.
+- **Best candidate:** the same recipe with `model=yolo11s.pt imgsz=1920 batch=4 nbs=4 cache=ram amp=True` on a Colab T4, epoch 27: mAP50 0.952, mAP50-95 0.770, Dot recall 0.844, Dot mAP50 0.895. It is the first run to raise Dot recall, and every class improves. Inference takes 37 ms per image on a T4.
+  - Not promoted yet: its dot-centre evaluation (imgsz 1920, tolerance 16 px) and 1920 rail sweep are pending.
+  - Its weights are still in Google Drive (`MyDrive/8ballpool/outputs/yolo11s-1920`), not in `outputs/`.
+- **YOLO11n at 1280 on Colab** (`batch=8 nbs=8`), epoch 55: mAP50 0.926, Dot mAP50 0.839, Dot recall 0.778. Only precision improved; it is superseded by the 1920 YOLO11s run.
 - **Dot centres (8 px at 960, 359 dots):** full frame at conf 0.25 → 324 matched, F1 0.932. Adding four 65% tiles at conf 0.50 (Dot only) → 341, F1 0.955. Tiles from the crop fine-tune → 343, F1 0.959. Tiling stayed experimental.
 - **Rail fitting:** labelled dots → 19/20 valid. 640 model at conf 0.05 → 19/20 valid and agreeing with labels. `configs/geometry.yaml` now runs at imgsz 960 with that 640-derived 0.05; re-run `sweep_rail_confidence.py` to select the 960 threshold.
 - **Dead ends:** crop-aware fine-tuning (3 of 12 epochs, forced 960→640 by memory, +2 dots over plain tiling) and rectified rail-strip inference (61/359 dots). Untried: YOLO11s, AMP, hard-negative mining.
