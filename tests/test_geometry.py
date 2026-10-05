@@ -4,7 +4,7 @@ import unittest
 
 import numpy as np
 
-from billiards.geometry import (
+from geometry import (
     PointObservation,
     RailFitConfig,
     fit_rails,

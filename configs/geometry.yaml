@@ -1,4 +1,4 @@
-# Initial rail-fitting settings for clear, fully visible 1920x1080 images.
+# Rail-fitting settings for clear, fully visible 1920x1080 images.
 # Thresholds are ratios where possible so real images may have other resolutions.
 
 distance_threshold_ratio: 0.004
@@ -9,10 +9,10 @@ max_quad_area_fraction: 0.95
 corner_margin_ratio: 0.25
 min_adjacent_angle_degrees: 12.0
 
-# Dot-candidate operating point selected by downstream rail fitting on validation.
-# This deliberately favors recall; RANSAC rejects non-collinear candidates. It is
-# not a ball-class threshold. 0.05 was selected with the 640 px model; re-run
-# scripts/sweep_rail_confidence.py before treating it as the 960 px operating point.
-prediction_confidence: 0.05
+# Dot-candidate operating point for the YOLO11s 1920 model, selected by rail fitting
+# on validation (outputs/yolo11s-1920/rail-sweep): every confidence from 0.05 to 0.20
+# gives 19/20 valid fits that agree with labels; 0.15 sits mid-plateau. It favors
+# recall because line fitting rejects non-collinear candidates. Not a ball threshold.
+prediction_confidence: 0.15
 prediction_nms_iou: 0.70
-imgsz: 960
+imgsz: 1920

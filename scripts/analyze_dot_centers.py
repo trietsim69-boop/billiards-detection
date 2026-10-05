@@ -3,8 +3,8 @@
 YOLO reports boxes, but the table-geometry stage consumes dot centres. This
 diagnostic therefore performs one-to-one matching between predicted and labelled
 Dot centres at several pixel tolerances. Distances are expressed at the configured
-inference scale (960 px by default), while overlays remain in original-image
-coordinates.
+inference scale (1920 px by default, the frames' native width), while overlays
+remain in original-image coordinates.
 """
 
 from __future__ import annotations
@@ -53,7 +53,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--weights",
         type=Path,
-        default=Path("outputs/detection/baseline-yolo11n-960/weights/best.pt"),
+        default=Path("outputs/yolo11s-1920/weights/best.pt"),
     )
     parser.add_argument(
         "--data",
@@ -64,11 +64,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path("outputs/detection/baseline-yolo11n-960-dot-centers"),
+        default=Path("outputs/yolo11s-1920/dot-centers"),
     )
-    parser.add_argument("--imgsz", type=int, default=960)
+    parser.add_argument("--imgsz", type=int, default=1920)
     parser.add_argument("--device", default="0")
-    parser.add_argument("--batch", type=int, default=2)
+    parser.add_argument("--batch", type=int, default=1)
     parser.add_argument("--prediction-iou", type=float, default=0.70)
     parser.add_argument("--min-prediction-conf", type=float, default=0.01)
     parser.add_argument(
@@ -81,7 +81,7 @@ def parse_args() -> argparse.Namespace:
         "--tolerances",
         type=float,
         nargs="+",
-        default=(4.0, 8.0, 12.0, 16.0),
+        default=(8.0, 16.0, 24.0, 32.0),
         help="Centre-distance tolerances in pixels at --imgsz scale.",
     )
     parser.add_argument(
@@ -93,7 +93,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--display-tolerance",
         type=float,
-        default=8.0,
+        default=16.0,
         help="Model-scale pixel tolerance used for the gallery.",
     )
     return parser.parse_args()

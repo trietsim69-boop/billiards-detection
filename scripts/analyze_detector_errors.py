@@ -56,7 +56,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--weights",
         type=Path,
-        default=Path("outputs/detection/baseline-yolo11n-960/weights/best.pt"),
+        default=Path("outputs/yolo11s-1920/weights/best.pt"),
     )
     parser.add_argument(
         "--data",
@@ -67,11 +67,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path("outputs/detection/baseline-yolo11n-960-error-analysis"),
+        default=Path("outputs/yolo11s-1920/error-analysis"),
     )
-    parser.add_argument("--imgsz", type=int, default=960)
+    parser.add_argument("--imgsz", type=int, default=1920)
     parser.add_argument("--device", default="0")
-    parser.add_argument("--batch", type=int, default=2)
+    parser.add_argument("--batch", type=int, default=1)
     parser.add_argument("--iou", type=float, default=0.50)
     parser.add_argument("--prediction-iou", type=float, default=0.70)
     parser.add_argument("--min-prediction-conf", type=float, default=0.01)
@@ -95,12 +95,7 @@ def load_dataset(
         image_dir = data_path.parent / image_dir
     image_dir = image_dir.resolve()
 
-    names_value = config["names"]
-    if isinstance(names_value, dict):
-        class_names = [str(names_value[index]) for index in range(len(names_value))]
-    else:
-        class_names = [str(name) for name in names_value]
-
+    class_names = [str(name) for name in config["names"]]
     image_paths = sorted(
         path for path in image_dir.iterdir() if path.suffix.lower() in IMAGE_SUFFIXES
     )

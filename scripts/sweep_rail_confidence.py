@@ -15,14 +15,10 @@ from statistics import mean, median
 from typing import Sequence
 
 import cv2
-import matplotlib
-
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np
 
-from analyze_detector_errors import write_csv  # noqa: E402
-from fit_table_rails import (  # noqa: E402
+from analyze_detector_errors import write_csv
+from fit_table_rails import (
     find_images,
     load_labelled_dots,
     load_settings,
@@ -32,7 +28,7 @@ from fit_table_rails import (  # noqa: E402
     render_result,
     yolo_dot_class_id,
 )
-from billiards.geometry import fit_rails  # noqa: E402
+from geometry import fit_rails
 
 
 def parse_args() -> argparse.Namespace:
@@ -47,7 +43,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--weights",
         type=Path,
-        default=Path("outputs/detection/baseline-yolo11n-960/weights/best.pt"),
+        default=Path("outputs/yolo11s-1920/weights/best.pt"),
     )
     parser.add_argument(
         "--config", type=Path, default=Path("configs/geometry.yaml")
@@ -55,7 +51,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path("outputs/geometry/rail-confidence-sweep"),
+        default=Path("outputs/yolo11s-1920/rail-sweep"),
     )
     parser.add_argument("--labels-dir", type=Path)
     parser.add_argument("--dot-class-id", type=int, default=2)
@@ -134,53 +130,6 @@ def summarize(
             }
         )
     return summary_rows
-
-
-def plot_summary(rows: Sequence[dict[str, object]], output_path: Path) -> None:
-    confidences = [float(row["confidence"]) for row in rows]
-    figure, left_axis = plt.subplots(figsize=(9, 5.5))
-    left_axis.plot(
-        confidences,
-        [int(row["four_rail_count"]) for row in rows],
-        marker="o",
-        label="Four rails produced",
-    )
-    left_axis.plot(
-        confidences,
-        [int(row["structurally_valid_count"]) for row in rows],
-        marker="o",
-        label="Structurally valid",
-    )
-    left_axis.plot(
-        confidences,
-        [int(row["valid_and_agrees_1pct_count"]) for row in rows],
-        marker="o",
-        linewidth=2.5,
-        label="Valid + agrees with labels",
-    )
-    left_axis.set_xlabel("YOLO Dot confidence")
-    left_axis.set_ylabel("Images out of 20")
-    left_axis.set_ylim(0, max(int(row["images"]) for row in rows) + 1)
-    left_axis.grid(alpha=0.25)
-
-    right_axis = left_axis.twinx()
-    right_axis.plot(
-        confidences,
-        [float(row["mean_dot_count"]) for row in rows],
-        color="tab:gray",
-        linestyle="--",
-        marker="x",
-        label="Mean Dot candidates",
-    )
-    right_axis.set_ylabel("Mean Dot candidates per image")
-
-    handles_left, labels_left = left_axis.get_legend_handles_labels()
-    handles_right, labels_right = right_axis.get_legend_handles_labels()
-    left_axis.legend(handles_left + handles_right, labels_left + labels_right, loc="best")
-    figure.suptitle("Rail-fitting confidence sweep (validation only)")
-    figure.tight_layout()
-    figure.savefig(output_path, dpi=160)
-    plt.close(figure)
 
 
 def format_optional(value: object, digits: int = 2) -> str:
@@ -346,7 +295,6 @@ def main() -> int:
     summary_rows = summarize(rows_by_threshold)
     write_csv(args.output / "per_image_all_thresholds.csv", per_image_rows)
     write_csv(args.output / "confidence_summary.csv", summary_rows)
-    plot_summary(summary_rows, args.output / "confidence_sweep.png")
     report_path = args.output / "RAIL_CONFIDENCE_SWEEP.md"
     report_path.write_text(
         markdown_report(summary_rows, len(image_paths)), encoding="utf-8"

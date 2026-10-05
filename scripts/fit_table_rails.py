@@ -15,20 +15,13 @@ import argparse
 from dataclasses import fields
 import json
 from pathlib import Path
-import sys
 from typing import Sequence
 
 import cv2
 import numpy as np
 import yaml
 
-
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-SRC_ROOT = PROJECT_ROOT / "src"
-if str(SRC_ROOT) not in sys.path:
-    sys.path.insert(0, str(SRC_ROOT))
-
-from analyze_detector_errors import (  # noqa: E402
+from analyze_detector_errors import (
     IMAGE_SUFFIXES,
     create_contact_sheet,
     draw_banner,
@@ -36,7 +29,7 @@ from analyze_detector_errors import (  # noqa: E402
     result_to_predictions,
     write_csv,
 )
-from billiards.geometry import (  # noqa: E402
+from geometry import (
     PointObservation,
     RailFitConfig,
     RailFitResult,
@@ -69,7 +62,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--weights",
         type=Path,
-        default=Path("outputs/detection/baseline-yolo11n-960/weights/best.pt"),
+        default=Path("outputs/yolo11s-1920/weights/best.pt"),
     )
     parser.add_argument(
         "--config", type=Path, default=Path("configs/geometry.yaml")
@@ -77,7 +70,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path("outputs/geometry/rail-fitting"),
+        default=Path("outputs/yolo11s-1920/rail-fitting"),
     )
     parser.add_argument(
         "--labels-dir",
